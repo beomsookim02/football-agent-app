@@ -2051,8 +2051,11 @@ function createSignedPlayerRow(player) {
         <strong>${player.name}</strong>
       </span>
 
-      <small>
+      <small class="desktop-agency-meta">
         Age ${player.age} · ${player.position}
+      </small>
+      <small class="mobile-agency-meta">
+        Age ${player.age} · ${player.position} · ${player.club}
       </small>
     </span>
 

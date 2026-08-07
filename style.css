@@ -3995,3 +3995,105 @@ body.setup-open {
     content: "· ";
   }
 }
+
+/* =========================================================
+   FINAL MOBILE MY AGENCY LAYOUT
+   ========================================================= */
+
+.mobile-agency-meta {
+  display: none !important;
+}
+
+@media (max-width: 680px) {
+  #agency-view { overflow-x: hidden; }
+
+  .agency-list-wrapper {
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .agency-list-header { display: none !important; }
+
+  .agency-player-list { gap: 8px !important; }
+
+  .agency-player-row {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 11px 12px !important;
+    gap: 7px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 13px !important;
+    background: var(--card) !important;
+  }
+
+  .row-player {
+    min-width: 0 !important;
+    padding-right: 54px !important;
+  }
+
+  .row-player-name { gap: 6px !important; }
+  .row-player-name strong { font-size: 14px !important; margin: 0 !important; }
+  .row-player-name .country-flag { width: 17px !important; height: 12px !important; }
+
+  .desktop-agency-meta { display: none !important; }
+  .mobile-agency-meta {
+    display: block !important;
+    margin-top: 3px !important;
+    color: var(--muted) !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .row-club { display: none !important; }
+
+  .row-overall {
+    position: absolute !important;
+    top: 10px !important;
+    right: 11px !important;
+    width: 44px !important;
+    height: 32px !important;
+    transform: none !important;
+    font-size: 14px !important;
+  }
+
+  .row-contract {
+    transform: none !important;
+    justify-self: auto !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+  }
+  .row-contract::before {
+    content: "Contract " !important;
+    color: var(--muted) !important;
+  }
+
+  .row-value {
+    font-size: 11px !important;
+    font-weight: 800 !important;
+  }
+  .row-value::before {
+    content: "Value " !important;
+    color: var(--muted) !important;
+    font-weight: 700 !important;
+  }
+
+  .row-ballon-dor { display: none !important; }
+
+  .terminate-agency-button {
+    width: 100% !important;
+    min-height: 34px !important;
+    margin: 0 !important;
+    padding: 6px 9px !important;
+    justify-self: stretch !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+  }
+}
