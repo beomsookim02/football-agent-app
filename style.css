@@ -4423,3 +4423,23 @@ body.setup-open {
     transform: translateX(-12px) !important;
   }
 }
+
+
+/* =========================================================
+   MOBILE SCOUT — LEFT ALIGN CONTRACT / SIGNING COST
+   ========================================================= */
+@media (max-width: 680px) {
+  .scout-contract,
+  .scout-cost {
+    text-align: left !important;
+  }
+
+  .scout-contract {
+    justify-self: stretch !important;
+  }
+
+  .scout-cost {
+    justify-self: stretch !important;
+  }
+}
+
