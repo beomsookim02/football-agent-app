@@ -5015,7 +5015,7 @@ function ensureCareerEndingStyles() {
 
     .career-ending-summary {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }
 
@@ -5121,7 +5121,11 @@ function ensureCareerEndingStyles() {
       }
 
       .career-ending-summary {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .career-ending-summary .career-ending-stat:first-child {
+        grid-column: 1 / -1;
       }
     }
   `;
@@ -5227,6 +5231,13 @@ function openCareerEnding() {
           CURRENT PLAYERS
         </span>
         <strong>${signedPlayers.length}</strong>
+      </div>
+
+      <div class="career-ending-stat">
+        <span class="career-ending-label">
+          FINAL BALANCE
+        </span>
+        <strong>${formatMarketValue(agencyMoney)}</strong>
       </div>
     </div>
 
