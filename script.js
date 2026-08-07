@@ -877,6 +877,8 @@ careerSetupForm.addEventListener("submit", (event) => {
 
   if (!name || !countryCode) return;
 
+  const isNewCareerProfile = !agentProfile;
+
   agentProfile = {
     name,
     countryCode,
@@ -887,6 +889,17 @@ careerSetupForm.addEventListener("submit", (event) => {
   renderAgentProfile();
   closeCareerSetup();
   showView("scout");
+
+  if (isNewCareerProfile) {
+    void showGameDialog({
+      eyebrow: "YOUR CAREER",
+      title: "Your Career Begins",
+      message:
+        "You have 30 seasons to build the world's greatest football agency. Sign players, complete transfers, grow your reputation, and guide your clients to the Ballon d'Or.",
+      confirmLabel: "START YOUR JOURNEY",
+      tone: "default",
+    });
+  }
 });
 
 agentNameInput.addEventListener("input", updateAgentPreview);
@@ -2363,7 +2376,26 @@ function ensureAgencyListLayout() {
   }
 }
 
+function ensureAgencyRetirementNote() {
+  const headerCopy = agencyView?.querySelector(
+    ".agency-page-header > div:first-child",
+  );
+
+  if (
+    !headerCopy ||
+    headerCopy.querySelector(".agency-retirement-note")
+  ) {
+    return;
+  }
+
+  const note = document.createElement("p");
+  note.className = "agency-retirement-note";
+  note.textContent = "Players automatically retire at age 40.";
+  headerCopy.appendChild(note);
+}
+
 function renderSignedPlayers() {
+  ensureAgencyRetirementNote();
   ensureAgencyListLayout();
   signedListElement.innerHTML = "";
 
@@ -3434,18 +3466,20 @@ function openTransferResultModal({
 async function acceptClubOffer(offerId) {
   if (!activeClubOffers) return;
 
+  const offerSession = activeClubOffers;
+
   const player = signedPlayers.find(
-    (signedPlayer) => signedPlayer.id === activeClubOffers.playerId,
+    (signedPlayer) => signedPlayer.id === offerSession.playerId,
   );
 
-  const selectedOffer = activeClubOffers.offers.find(
+  const selectedOffer = offerSession.offers.find(
     (offer) => offer.id === offerId,
   );
 
   if (!player || !selectedOffer) return;
 
   const previousClub =
-    activeClubOffers.previousClub || player.club;
+    offerSession.previousClub || player.club;
 
   const confirmed = await openTransferDecisionModal({
     playerName: player.name,
@@ -3462,9 +3496,10 @@ async function acceptClubOffer(offerId) {
     const trustLoss = randomInt(2, 4);
     applyTrustChange(player, -trustLoss);
 
-    activeClubOffers = null;
+    // Keep the same offer session alive so the player can choose again.
+    activeClubOffers = offerSession;
+
     renderSignedPlayers();
-    renderInbox();
     updateInterface();
 
     await openTransferResultModal({
@@ -3473,8 +3508,18 @@ async function acceptClubOffer(offerId) {
       playerName: player.name,
       fromClub: previousClub,
       toClub: selectedOffer.clubName,
-      message: `${player.name} decided not to accept the offer.`,
+      message:
+        `${player.name} decided not to accept the offer. You can recommend another offer.`,
     });
+
+    // Rebuild the offer screen so every button is fresh and clickable.
+    if (
+      activeClubOffers &&
+      activeClubOffers.playerId === player.id &&
+      player.contractYears === 0
+    ) {
+      renderClubOffers(player);
+    }
 
     return;
   }
@@ -3482,8 +3527,8 @@ async function acceptClubOffer(offerId) {
   if (Math.random() >= 0.99) {
     const reason = getDealCollapseReason();
 
-    activeClubOffers = null;
-    renderInbox();
+    // A collapsed deal does not consume the remaining choices.
+    activeClubOffers = offerSession;
     updateInterface();
 
     await openTransferResultModal({
@@ -3492,8 +3537,17 @@ async function acceptClubOffer(offerId) {
       playerName: player.name,
       fromClub: previousClub,
       toClub: selectedOffer.clubName,
-      message: `${reason}. No commission was received.`,
+      message:
+        `${reason}. No commission was received. You can recommend another offer.`,
     });
+
+    if (
+      activeClubOffers &&
+      activeClubOffers.playerId === player.id &&
+      player.contractYears === 0
+    ) {
+      renderClubOffers(player);
+    }
 
     return;
   }
@@ -3521,6 +3575,7 @@ async function acceptClubOffer(offerId) {
 
   renderSignedPlayers();
   renderInbox();
+  clearInboxDetail();
   updateInterface();
 
   await openTransferResultModal({
@@ -5326,7 +5381,7 @@ async function advanceToNextSeason() {
   selectedIds.clear();
 
   seasonLabelElement.textContent =
-    `SEASON ${currentSeason}`;
+    `SEASON ${currentSeason} / ${MAX_SEASONS}`;
 
   generateCandidates();
   renderSignedPlayers();
@@ -5437,7 +5492,7 @@ loadAgentProfile();
 const hasSavedGame = loadGameState();
 
 seasonLabelElement.textContent =
-  `SEASON ${currentSeason}`;
+    `SEASON ${currentSeason} / ${MAX_SEASONS}`;
 
 if (!hasSavedGame || candidates.length === 0) {
   generateCandidates();

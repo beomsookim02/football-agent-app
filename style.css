@@ -4262,3 +4262,31 @@ body.setup-open {
     font-weight: 850 !important;
   }
 }
+
+
+/* =========================================================
+   CAREER FLOW FINAL FIXES
+   ========================================================= */
+
+/* The career-ending screen uses z-index 11000.
+   Keep confirmation dialogs above it so NEW CAREER works on mobile and desktop. */
+.game-dialog-overlay {
+  z-index: 20000 !important;
+}
+
+/* My Agency retirement rule — visible on both PC and mobile. */
+.agency-retirement-note {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+@media (max-width: 680px) {
+  .agency-retirement-note {
+    display: block !important;
+    margin-top: 5px;
+    font-size: 10px;
+  }
+}
