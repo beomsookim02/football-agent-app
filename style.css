@@ -2341,3 +2341,693 @@ body.setup-open {
     padding: 12px 10px;
   }
 }
+
+
+/* =========================================================
+   FOOTBALL AGENT — FINAL MOBILE COMPACT + INBOX POLISH
+   ========================================================= */
+
+/* PC: make the Inbox message column look like a finished game UI */
+.inbox-sidebar {
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.018);
+}
+
+.inbox-sidebar-header {
+  min-height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.inbox-sidebar-header > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.inbox-sidebar-header > strong {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+@media (max-width: 680px) {
+  body {
+    padding: 0 12px 36px;
+    overflow-x: hidden;
+  }
+
+  main {
+    width: 100%;
+  }
+
+  .game-view {
+    padding-top: 22px;
+  }
+
+  /* Mobile navigation: profile first, game tabs below */
+  .main-navigation {
+    margin: 0 -12px;
+  }
+
+  .nav-inner {
+    width: 100%;
+    min-height: 0;
+    padding: 10px 12px 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+  }
+
+  .nav-brand-wrap {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .game-logo {
+    display: none;
+  }
+
+  .agent-profile-button {
+    min-width: 0;
+    max-width: calc(100% - 92px);
+    padding: 6px 9px;
+  }
+
+  .try-again-button {
+    flex: 0 0 auto;
+    margin-left: 0 !important;
+  }
+
+  .view-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .view-tab {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    border-radius: 11px;
+    font-size: 12px;
+    line-height: 1.05;
+    text-align: center;
+  }
+
+  /* Scout heading */
+  .top-bar {
+    margin-bottom: 14px;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .top-bar > div:first-child {
+    min-width: 0;
+  }
+
+  .top-bar h1 {
+    margin-bottom: 5px;
+    font-size: 34px;
+  }
+
+  .top-bar .description {
+    display: none;
+  }
+
+  .selection-box {
+    width: auto;
+    min-width: 84px;
+    flex: 0 0 auto;
+    padding: 9px 10px;
+    text-align: right;
+  }
+
+  .selection-box span {
+    font-size: 8px;
+  }
+
+  .selection-box strong {
+    font-size: 17px;
+  }
+
+  /* 2 x 2 agency dashboard */
+  .agency-dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 12px;
+    padding: 7px;
+    border-radius: 15px;
+  }
+
+  .agency-stat,
+  .upgrade-panel {
+    padding: 10px;
+    border-radius: 11px;
+  }
+
+  .agency-stat span,
+  .upgrade-panel span,
+  .selection-cost span {
+    margin-bottom: 3px;
+    font-size: 8px;
+  }
+
+  .agency-stat strong {
+    font-size: 15px;
+  }
+
+  .upgrade-panel {
+    grid-column: 1 / -1;
+    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .upgrade-panel strong {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .upgrade-button {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  /* Scout: compact list, not tall cards */
+  .scout-list {
+    border-radius: 13px;
+  }
+
+  .scout-player-row {
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(72px, 0.72fr)
+      minmax(62px, 0.62fr);
+    grid-template-areas:
+      "player player overall"
+      "potential club contract"
+      "value cost cost";
+    gap: 6px 7px;
+    padding: 10px 9px;
+  }
+
+  .scout-player-info {
+    align-self: center;
+  }
+
+  .scout-player-name-line {
+    gap: 6px;
+  }
+
+  .scout-player-name-line strong {
+    font-size: 14px;
+  }
+
+  .scout-player-info > small {
+    margin-top: 2px;
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .scout-overall {
+    width: 46px;
+    height: 46px;
+    justify-self: end;
+    transform: none;
+    border-radius: 11px;
+  }
+
+  .scout-overall strong {
+    font-size: 18px;
+  }
+
+  .scout-overall small {
+    margin-top: 1px;
+    font-size: 7px;
+  }
+
+  .scout-cell {
+    min-height: 44px;
+    padding: 6px 7px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
+  .scout-cell small {
+    margin-bottom: 2px;
+    font-size: 7px;
+    letter-spacing: 0.02em;
+  }
+
+  .scout-cell strong {
+    font-size: 10px;
+    line-height: 1.05;
+  }
+
+  .scout-potential strong {
+    font-size: 12px;
+  }
+
+  .scout-contract,
+  .scout-cost {
+    text-align: right;
+  }
+
+  /* Bottom actions no longer cover the player list */
+  .bottom-actions {
+    position: static;
+    bottom: auto;
+    margin-top: 10px;
+    padding: 8px;
+    gap: 6px;
+    border-radius: 14px;
+    flex-direction: column;
+    align-items: stretch;
+    backdrop-filter: none;
+  }
+
+  .selection-cost {
+    margin: 0;
+    padding: 2px 4px 4px;
+  }
+
+  .selection-cost strong {
+    font-size: 15px;
+  }
+
+  .bottom-actions .primary-button,
+  .bottom-actions .secondary-button {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  /* My Agency: compact player cards */
+  .agency-page-header {
+    margin-bottom: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .agency-page-header h1 {
+    font-size: 38px;
+  }
+
+  .agency-page-summary {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    text-align: left;
+  }
+
+  .agency-toolbar {
+    margin-bottom: 10px;
+    gap: 7px;
+    flex-direction: column;
+  }
+
+  .agency-search,
+  .agency-sort {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .agency-list-wrapper {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .agency-list-header {
+    display: none !important;
+  }
+
+  .agency-player-list {
+    gap: 7px;
+  }
+
+  .agency-player-row {
+    min-width: 0 !important;
+    width: 100%;
+    padding: 10px 11px;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "player overall contract"
+      "club status status"
+      "value ballon ballon"
+      "terminate terminate terminate";
+    gap: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--card);
+  }
+
+  .agency-player-row:last-child {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .row-player { grid-area: player; min-width: 0; }
+  .row-club { grid-area: club; }
+  .row-overall { grid-area: overall; justify-self: end; transform: none; }
+  .row-contract { grid-area: contract; justify-self: end; transform: none; }
+  .row-status { grid-area: status; max-width: 100%; }
+  .row-value { grid-area: value; font-weight: 750; }
+  .row-ballon-dor { grid-area: ballon; justify-self: end; text-align: right; }
+
+  .row-player strong {
+    font-size: 14px;
+  }
+
+  .row-player small,
+  .row-club,
+  .row-contract,
+  .row-value {
+    font-size: 10px;
+  }
+
+  .row-status {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .terminate-agency-button,
+  .terminate-contract-button {
+    grid-area: terminate;
+    justify-self: stretch !important;
+    width: 100% !important;
+    min-height: 34px;
+    margin-top: 1px;
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+
+  /* Inbox mobile */
+  .inbox-page-header {
+    margin-bottom: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .inbox-page-summary {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    text-align: left;
+  }
+
+  .inbox-layout {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    border-radius: 13px;
+  }
+
+  .inbox-sidebar-header {
+    min-height: 44px;
+    padding: 0 11px;
+    border-right: 0;
+  }
+
+  .inbox-message-list {
+    max-height: 220px;
+  }
+
+  .inbox-message-item {
+    padding: 10px 9px;
+  }
+
+  .inbox-message-detail {
+    min-height: 0;
+    padding: 18px 14px;
+  }
+
+  /* Modals */
+  .transfer-game-overlay,
+  .agency-action-overlay,
+  .ballon-dor-overlay,
+  .reroll-game-overlay {
+    padding: 12px !important;
+  }
+
+  .transfer-game-modal,
+  .agency-action-modal,
+  .ballon-dor-modal,
+  .reroll-game-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 18px 14px !important;
+    border-radius: 15px !important;
+  }
+}
+
+
+/* =========================================================
+   FOOTBALL AGENT — GAME DIALOG SYSTEM
+   Replaces browser alert() / confirm() with in-game modals.
+   ========================================================= */
+
+.game-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+
+  display: grid;
+  place-items: center;
+
+  padding: 24px;
+
+  background: rgba(10, 10, 10, 0.52);
+  backdrop-filter: blur(8px);
+}
+
+.game-dialog-modal {
+  width: min(100%, 480px);
+  padding: 28px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 22px;
+
+  background: #151515;
+  color: white;
+
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.34);
+
+  animation: game-dialog-enter 160ms ease-out;
+}
+
+@keyframes game-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.game-dialog-eyebrow {
+  margin: 0 0 9px;
+
+  color: #9b978f;
+
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.game-dialog-title {
+  margin: 0;
+
+  color: white;
+
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.game-dialog-message {
+  margin: 15px 0 0;
+
+  color: #bbb7af;
+
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.game-dialog-stats {
+  margin-top: 20px;
+
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.game-dialog-stat {
+  min-width: 0;
+  padding: 13px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.game-dialog-stat span {
+  display: block;
+  margin-bottom: 5px;
+
+  color: #8f8b84;
+
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+}
+
+.game-dialog-stat strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: white;
+
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-dialog-actions {
+  margin-top: 24px;
+
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.game-dialog-actions .game-dialog-confirm:only-child {
+  grid-column: 1 / -1;
+}
+
+.game-dialog-button {
+  min-height: 48px;
+  padding: 0 14px;
+
+  border-radius: 12px;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+
+  cursor: pointer;
+}
+
+.game-dialog-confirm {
+  border: 1px solid #22c55e;
+
+  background: #22c55e;
+  color: #07110b;
+}
+
+.game-dialog-confirm:hover {
+  filter: brightness(1.05);
+}
+
+.game-dialog-cancel {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+
+  background: rgba(255, 255, 255, 0.07);
+  color: white;
+}
+
+.game-dialog-cancel:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.game-dialog-warning .game-dialog-confirm {
+  border-color: #f4c34b;
+  background: #f4c34b;
+  color: #17130a;
+}
+
+.game-dialog-danger .game-dialog-confirm {
+  border-color: #d85c4f;
+  background: #d85c4f;
+  color: white;
+}
+
+@media (max-width: 680px) {
+  .game-dialog-overlay {
+    padding: 14px;
+  }
+
+  .game-dialog-modal {
+    padding: 22px 17px;
+    border-radius: 18px;
+  }
+
+  .game-dialog-title {
+    font-size: 26px;
+  }
+
+  .game-dialog-message {
+    font-size: 13px;
+  }
+
+  .game-dialog-stat {
+    padding: 11px;
+  }
+
+  .game-dialog-stat strong {
+    font-size: 17px;
+  }
+
+  .game-dialog-actions {
+    margin-top: 20px;
+    grid-template-columns: 1fr;
+  }
+
+  .game-dialog-actions .game-dialog-confirm:only-child {
+    grid-column: auto;
+  }
+
+  .game-dialog-button {
+    min-height: 46px;
+  }
+}

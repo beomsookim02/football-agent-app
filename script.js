@@ -570,18 +570,6 @@ const positions = [
   "GK",
 ];
 
-const personalities = [
-  "Highly ambitious",
-  "Very professional",
-  "Money-minded",
-  "Extremely loyal",
-  "Temperamental",
-  "Thrives in big matches",
-  "Adapts quickly",
-  "Demands regular playing time",
-  "Develops slowly but steadily",
-  "Overconfident",
-];
 const countryCodes = {
   Brazil: "br",
   Argentina: "ar",
@@ -905,6 +893,87 @@ agentNameInput.addEventListener("input", updateAgentPreview);
 agentNationalitySelect.addEventListener("change", updateAgentPreview);
 agentProfileButton.addEventListener("click", openCareerSetup);
 
+
+function showGameDialog({
+  eyebrow = "FOOTBALL AGENT",
+  title,
+  message = "",
+  stats = [],
+  confirmLabel = "CONTINUE",
+  cancelLabel = "",
+  tone = "default",
+}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "game-dialog-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = `game-dialog-modal game-dialog-${tone}`;
+
+    const statsMarkup =
+      Array.isArray(stats) && stats.length > 0
+        ? `
+          <div class="game-dialog-stats">
+            ${stats
+              .map(
+                (item) => `
+                  <div class="game-dialog-stat">
+                    <span>${item.label}</span>
+                    <strong>${item.value}</strong>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+        `
+        : "";
+
+    modal.innerHTML = `
+      <p class="game-dialog-eyebrow">${eyebrow}</p>
+      <h2 class="game-dialog-title">${title}</h2>
+      ${
+        message
+          ? `<p class="game-dialog-message">${message}</p>`
+          : ""
+      }
+      ${statsMarkup}
+      <div class="game-dialog-actions">
+        ${
+          cancelLabel
+            ? `<button class="game-dialog-button game-dialog-cancel" type="button">${cancelLabel}</button>`
+            : ""
+        }
+        <button class="game-dialog-button game-dialog-confirm" type="button">${confirmLabel}</button>
+      </div>
+    `;
+
+    const close = (result) => {
+      overlay.remove();
+      document.body.style.overflow = "";
+      resolve(result);
+    };
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    modal
+      .querySelector(".game-dialog-confirm")
+      .addEventListener("click", () => close(true));
+
+    const cancelButton = modal.querySelector(".game-dialog-cancel");
+    if (cancelButton) {
+      cancelButton.addEventListener("click", () => close(false));
+    }
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay && cancelLabel) {
+        close(false);
+      }
+    });
+  });
+}
+
 const tryAgainButton = document.createElement("button");
 
 tryAgainButton.type = "button";
@@ -931,10 +1000,16 @@ agentProfileButton.insertAdjacentElement(
   tryAgainButton,
 );
 
-tryAgainButton.addEventListener("click", () => {
-  const confirmed = window.confirm(
-    "Start again from Season 1? All current game progress will be permanently deleted.",
-  );
+tryAgainButton.addEventListener("click", async () => {
+  const confirmed = await showGameDialog({
+    eyebrow: "CAREER RESET",
+    title: "Start Over?",
+    message:
+      "Your current career progress will be permanently deleted and the game will return to Season 1.",
+    confirmLabel: "START AGAIN",
+    cancelLabel: "KEEP PLAYING",
+    tone: "danger",
+  });
 
   if (!confirmed) {
     return;
@@ -1822,10 +1897,6 @@ const contractYears = generateContractYears();
     calculateSigningCost(
       marketValue,
     ),
-
-  personality:
-    randomItem(personalities),
-
   club: club.name,
   clubLevel: club.level,
   contractYears,
@@ -1904,10 +1975,6 @@ function createPlayerCard(
     <small>
       Age ${player.age} · ${player.position} ·
       ${player.playerType}
-    </small>
-
-    <small class="scout-personality">
-      ${player.personality}
     </small>
   </span>
 
@@ -2735,7 +2802,12 @@ function findNewClubForPlayer(playerId) {
   if (!player) return;
 
   if (player.contractYears > 0) {
-    window.alert(`${player.name} already has a club contract.`);
+    void showGameDialog({
+      eyebrow: "PLAYER STATUS",
+      title: "Already Under Contract",
+      message: `${player.name} already has an active club contract.`,
+      confirmLabel: "GOT IT",
+    });
     return;
   }
 
@@ -3623,17 +3695,25 @@ function togglePlayerSelection(
     getRemainingPlayerCapacity();
 
   if (remainingSeasonSlots === 0) {
-    window.alert(
-      "You have already reached this season's signing limit.",
-    );
+    void showGameDialog({
+      eyebrow: "SIGNING LIMIT",
+      title: "No Signing Slots Left",
+      message:
+        "You have already reached this season's maximum number of player signings.",
+      confirmLabel: "GOT IT",
+    });
 
     return;
   }
 
   if (remainingCapacity === 0) {
-    window.alert(
-      "Your agency is at full capacity. Upgrade the agency before signing another player.",
-    );
+    void showGameDialog({
+      eyebrow: "AGENCY CAPACITY",
+      title: "Agency Full",
+      message:
+        "Your agency has no open player slots. Upgrade the agency before signing another player.",
+      confirmLabel: "GOT IT",
+    });
 
     return;
   }
@@ -3648,13 +3728,14 @@ function togglePlayerSelection(
     selectedIds.size >=
     maximumSelectable
   ) {
-    window.alert(
-      `You can only select ${maximumSelectable} more player${
-        maximumSelectable === 1
-          ? ""
-          : "s"
-      }.`,
-    );
+    void showGameDialog({
+      eyebrow: "SELECTION LIMIT",
+      title: "Selection Limit Reached",
+      message: `You can only select ${maximumSelectable} more player${
+        maximumSelectable === 1 ? "" : "s"
+      } right now.`,
+      confirmLabel: "GOT IT",
+    });
 
     return;
   }
@@ -3868,9 +3949,24 @@ function signSelectedPlayers() {
     );
 
   if (totalCost > agencyMoney) {
-    window.alert(
-      "You do not have enough money to sign these players.",
-    );
+    void showGameDialog({
+      eyebrow: "AVAILABLE FUNDS",
+      title: "Not Enough Funds",
+      message:
+        "Your agency does not have enough money to complete these signings.",
+      stats: [
+        {
+          label: "AVAILABLE",
+          value: formatMarketValue(agencyMoney),
+        },
+        {
+          label: "REQUIRED",
+          value: formatMarketValue(totalCost),
+        },
+      ],
+      confirmLabel: "GOT IT",
+      tone: "danger",
+    });
 
     return;
   }
@@ -4066,40 +4162,6 @@ function calculateSeasonGrowth(
   if (potentialGap >= 25) {
     maximumGrowth += 1;
   }
-
-  if (
-    player.personality ===
-    "Very professional"
-  ) {
-    maximumGrowth += 1;
-  }
-
-  if (
-    player.personality ===
-    "Develops slowly but steadily"
-  ) {
-    minimumGrowth = Math.max(
-      minimumGrowth,
-      1,
-    );
-
-    maximumGrowth = Math.min(
-      maximumGrowth,
-      3,
-    );
-  }
-
-  if (
-    player.personality ===
-      "Overconfident" &&
-    Math.random() < 0.25
-  ) {
-    maximumGrowth = Math.max(
-      maximumGrowth - 1,
-      0,
-    );
-  }
-
   const growth = randomInt(
     minimumGrowth,
     Math.max(
@@ -5131,10 +5193,16 @@ function openCareerEnding() {
 
   modal
     .querySelector(".career-ending-new-career")
-    .addEventListener("click", () => {
-      const confirmed = window.confirm(
-        "Start a new career? Your current game progress and agent profile will be permanently deleted.",
-      );
+    .addEventListener("click", async () => {
+      const confirmed = await showGameDialog({
+        eyebrow: "NEW CAREER",
+        title: "Begin a New Journey?",
+        message:
+          "Your completed career, game progress and agent profile will be permanently deleted.",
+        confirmLabel: "START NEW CAREER",
+        cancelLabel: "VIEW CAREER",
+        tone: "danger",
+      });
 
       if (!confirmed) {
         return;
@@ -5159,11 +5227,24 @@ async function advanceToNextSeason() {
       (message) => message.type === "transfer-offer",
     ).length;
 
-    window.alert(
-      `Resolve all required inbox actions before advancing.\n\n` +
-      `Expired contracts: ${expiredCount}\n` +
-      `Transfer offers: ${transferOfferCount}`,
-    );
+    await showGameDialog({
+      eyebrow: "SEASON BLOCKED",
+      title: "Inbox Action Required",
+      message:
+        "Resolve all required player and club decisions before advancing to the next season.",
+      stats: [
+        {
+          label: "EXPIRED CONTRACTS",
+          value: expiredCount,
+        },
+        {
+          label: "TRANSFER OFFERS",
+          value: transferOfferCount,
+        },
+      ],
+      confirmLabel: "GO TO INBOX",
+      tone: "warning",
+    });
 
     showView("inbox");
     return;
@@ -5186,11 +5267,25 @@ async function advanceToNextSeason() {
     const remaining =
       seasonSigningLimit - signingsThisSeason;
 
-    const confirmed = window.confirm(
-      `You can still sign ${remaining} more player${
+    const confirmed = await showGameDialog({
+      eyebrow: "SEASON ${currentSeason}",
+      title: "Advance to Next Season?",
+      message: `You still have ${remaining} signing slot${
         remaining === 1 ? "" : "s"
-      } this season.\n\nContinue to the next season anyway?`,
-    );
+      } available this season.`,
+      stats: [
+        {
+          label: "SIGNINGS USED",
+          value: `${signingsThisSeason} / ${seasonSigningLimit}`,
+        },
+        {
+          label: "SLOTS REMAINING",
+          value: remaining,
+        },
+      ],
+      confirmLabel: "NEXT SEASON",
+      cancelLabel: "STAY THIS SEASON",
+    });
 
     if (!confirmed) {
       return;
