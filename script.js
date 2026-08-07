@@ -2063,10 +2063,19 @@ function createSignedPlayerRow(player) {
       ${player.club}
     </span>
 
-    <span
-      class="row-overall overall-pill ${getOverallTier(player.overall)}"
-    >
-      ${player.overall}
+    <span class="agency-rating-group">
+      <span
+        class="row-ballon-dor"
+        title="Ballon d'Or wins: ${Number(player.ballonDorWins) || 0}"
+      >
+        ${"🏆".repeat(Number(player.ballonDorWins) || 0)}
+      </span>
+
+      <span
+        class="row-overall overall-pill ${getOverallTier(player.overall)}"
+      >
+        ${player.overall}
+      </span>
     </span>
 
     <span class="${contractClass}">
@@ -2075,13 +2084,6 @@ function createSignedPlayerRow(player) {
 
     <span class="row-value">
       ${formatMarketValue(player.marketValue)}
-    </span>
-
-    <span
-      class="row-ballon-dor"
-      title="Ballon d'Or wins: ${Number(player.ballonDorWins) || 0}"
-    >
-      ${"🏆".repeat(Number(player.ballonDorWins) || 0)}
     </span>
 
     <button
@@ -2293,44 +2295,50 @@ function ensureAgencyListLayout() {
     const style = document.createElement("style");
     style.id = "agency-list-layout-fix";
     style.textContent = `
-      .agency-list-header,
-      .agency-player-row {
-        display: grid !important;
-        grid-template-columns:
-          minmax(220px, 2fr)
-          minmax(110px, 1fr)
-          70px
-          100px
-          minmax(120px, 1fr)
-          minmax(120px, 1fr)
-          minmax(100px, 1fr) !important;
-        align-items: center !important;
-        column-gap: 16px !important;
-      }
+      @media (min-width: 681px) {
+        .agency-list-header,
+        .agency-player-row {
+          display: grid !important;
+          grid-template-columns:
+            minmax(220px, 2fr)
+            minmax(110px, 1fr)
+            70px
+            100px
+            minmax(120px, 1fr)
+            minmax(120px, 1fr)
+            minmax(100px, 1fr) !important;
+          align-items: center !important;
+          column-gap: 16px !important;
+        }
 
-      .agency-list-header > span,
-      .agency-player-row > span {
-        min-width: 0;
-      }
+        .agency-list-header > span,
+        .agency-player-row > span {
+          min-width: 0;
+        }
 
-      .row-overall,
-      .row-contract,
-      .row-value {
-        justify-self: start;
-      }
+        .agency-rating-group {
+          display: contents;
+        }
 
-      .row-ballon-dor {
-        display: flex;
-        align-items: center;
-        gap: 3px;
-        min-height: 24px;
-        white-space: nowrap;
-        font-size: 16px;
-        line-height: 1;
-      }
+        .row-overall,
+        .row-contract,
+        .row-value {
+          justify-self: start;
+        }
 
-      .terminate-agency-button {
-        justify-self: end !important;
+        .row-ballon-dor {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          min-height: 24px;
+          white-space: nowrap;
+          font-size: 16px;
+          line-height: 1;
+        }
+
+        .terminate-agency-button {
+          justify-self: end !important;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -2480,7 +2488,7 @@ function renderInbox() {
                     <strong>${formatMarketValue(offer.transferFee)}</strong>
                   </div>
 
-                  <div>
+                  <div class="agency-commission-detail">
                     <span>AGENCY COMMISSION</span>
                     <strong>${formatMarketValue(offer.commission)}</strong>
                   </div>

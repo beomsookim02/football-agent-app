@@ -4097,3 +4097,168 @@ body.setup-open {
     font-size: 10px !important;
   }
 }
+
+
+/* =========================================================
+   MOBILE FINAL POLISH — Inbox / My Agency / Club Offers
+   ========================================================= */
+@media (max-width: 680px) {
+  /* Inbox: do not show the empty "Select a message" detail panel. */
+  .inbox-message-detail:has(.inbox-detail-placeholder) {
+    display: none !important;
+  }
+
+  .inbox-layout:has(.inbox-detail-placeholder) {
+    display: block !important;
+  }
+
+  /* My Agency: remove desktop column headings completely. */
+  #agency-view .agency-list-header {
+    display: none !important;
+  }
+
+  #agency-view .agency-list-wrapper {
+    overflow: visible !important;
+  }
+
+  #agency-view .agency-player-row {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding: 11px 12px 10px !important;
+    gap: 6px !important;
+  }
+
+  #agency-view .row-player {
+    padding-right: 118px !important;
+  }
+
+  #agency-view .desktop-agency-meta {
+    display: none !important;
+  }
+
+  #agency-view .mobile-agency-meta {
+    display: block !important;
+    margin-top: 3px !important;
+    color: var(--muted) !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  #agency-view .row-club {
+    display: none !important;
+  }
+
+  /* Trophies grow leftwards; OVR stays pinned at the far right. */
+  #agency-view .agency-rating-group {
+    position: absolute !important;
+    top: 10px !important;
+    right: 11px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 5px !important;
+    min-height: 32px !important;
+  }
+
+  #agency-view .agency-rating-group .row-overall {
+    position: static !important;
+    width: 44px !important;
+    height: 32px !important;
+    flex: 0 0 44px !important;
+    transform: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 14px !important;
+  }
+
+  #agency-view .agency-rating-group .row-ballon-dor {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 1px !important;
+    min-height: 0 !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  #agency-view .agency-rating-group .row-ballon-dor:empty {
+    display: none !important;
+  }
+
+  #agency-view .row-ballon-dor::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  #agency-view .row-contract {
+    transform: none !important;
+    align-self: flex-start !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-align: left !important;
+  }
+
+  #agency-view .row-contract::before {
+    content: "Contract " !important;
+    display: inline !important;
+    margin: 0 !important;
+    color: var(--muted) !important;
+    font-size: inherit !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+  }
+
+  #agency-view .row-value {
+    align-self: flex-start !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+  }
+
+  #agency-view .row-value::before {
+    content: "Value " !important;
+    display: inline !important;
+    margin: 0 !important;
+    color: var(--muted) !important;
+    font-size: inherit !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+  }
+
+  /* Small, unobtrusive action at bottom-right. */
+  #agency-view .terminate-agency-button {
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 28px !important;
+    align-self: flex-end !important;
+    margin: -30px 0 0 !important;
+    padding: 5px 8px !important;
+    border-radius: 7px !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+  }
+
+  /* The commission is the agent's actual income: emphasize it softly. */
+  .club-offer-details .agency-commission-detail {
+    background: rgba(101, 146, 61, 0.10) !important;
+    box-shadow: inset 0 0 0 1px rgba(101, 146, 61, 0.20) !important;
+  }
+
+  .club-offer-details .agency-commission-detail span {
+    color: #557b36 !important;
+  }
+
+  .club-offer-details .agency-commission-detail strong {
+    font-weight: 850 !important;
+  }
+}
