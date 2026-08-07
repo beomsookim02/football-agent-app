@@ -4290,3 +4290,40 @@ body.setup-open {
     font-size: 10px;
   }
 }
+
+
+/* =========================================================
+   PC MY AGENCY COLUMN ALIGNMENT FIX
+   ========================================================= */
+@media (min-width: 681px) {
+  .agency-list-header,
+  .agency-player-row {
+    grid-template-columns:
+      minmax(220px, 2fr)
+      minmax(140px, 1.35fr)
+      82px
+      100px
+      minmax(120px, 1fr)
+      minmax(170px, 1.25fr) !important;
+    column-gap: 16px !important;
+  }
+
+  .agency-player-row .row-player { grid-column: 1 !important; }
+  .agency-player-row .row-club { grid-column: 2 !important; }
+  .agency-player-row .row-overall { grid-column: 3 !important; }
+  .agency-player-row .row-contract { grid-column: 4 !important; }
+  .agency-player-row .row-value { grid-column: 5 !important; }
+
+  .agency-player-row .row-ballon-dor,
+  .agency-player-row .terminate-agency-button {
+    grid-column: 6 !important;
+  }
+
+  .agency-player-row .row-overall,
+  .agency-player-row .row-contract,
+  .agency-player-row .row-value,
+  .agency-player-row .row-ballon-dor,
+  .agency-player-row .terminate-agency-button {
+    transform: none !important;
+  }
+}
