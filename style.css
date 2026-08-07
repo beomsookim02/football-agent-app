@@ -4407,3 +4407,19 @@ body.setup-open {
     transform: translateX(9px) !important;
   }
 }
+
+
+/* =========================================================
+   PC MY AGENCY — FINAL HEADER / OVR MICRO ALIGNMENT
+   ========================================================= */
+@media (min-width: 681px) {
+  /* Move only the PLAYER header text, not the player rows. */
+  .agency-list-header > span:nth-child(1) {
+    transform: translateX(10px) !important;
+  }
+
+  /* Move the OVR value a little farther left. */
+  .agency-player-row .row-overall {
+    transform: translateX(-12px) !important;
+  }
+}
