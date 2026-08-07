@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Agent</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="career-setup" class="career-setup" aria-labelledby="career-setup-title">
+    <div class="career-setup-card">
+      <p class="eyebrow">NEW CAREER</p>
+      <h1 id="career-setup-title">Create Your Agent</h1>
+      <p class="career-setup-description">Choose your identity before beginning your football agent career.</p>
+
+      <form id="career-setup-form" class="career-setup-form">
+        <label class="career-field">
+          <span>AGENT NAME</span>
+          <input id="agent-name-input" type="text" maxlength="30" placeholder="Enter your name" autocomplete="name" required />
+        </label>
+
+        <label class="career-field">
+          <span>NATIONALITY</span>
+          <select id="agent-nationality-select" required>
+            <option value="">Choose a nationality</option>
+          </select>
+        </label>
+
+        <div id="agent-preview" class="agent-preview hidden" aria-live="polite">
+          <span id="agent-preview-flag" class="agent-preview-flag"></span>
+          <div>
+            <small>YOUR AGENT</small>
+            <strong id="agent-preview-name">—</strong>
+            <span id="agent-preview-country">—</span>
+          </div>
+        </div>
+
+        <button class="career-start-button" type="submit">Start Career →</button>
+      </form>
+    </div>
+  </section>
+
+  <nav class="main-navigation">
+    <div class="nav-inner">
+      <div class="nav-brand-wrap">
+        <strong class="game-logo">FOOTBALL AGENT</strong>
+        <button id="agent-profile-button" class="agent-profile-button" type="button" title="Change agent profile">
+          <span id="nav-agent-flag" class="nav-agent-flag"></span>
+          <span>
+            <strong id="nav-agent-name">Agent</strong>
+            <small id="nav-agent-country">Nationality</small>
+          </span>
+        </button>
+      </div>
+      <div class="view-tabs">
+        <button id="scout-tab" class="view-tab active" type="button">Scout</button>
+        <button id="inbox-tab" class="view-tab" type="button">
+          Inbox
+          <span id="nav-inbox-count">0</span>
+        </button>
+        <button id="agency-tab" class="view-tab" type="button">
+          My Agency
+          <span id="nav-player-count">0</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <section id="scout-view" class="game-view">
+      <header class="top-bar">
+        <div>
+          <p id="season-label" class="eyebrow">SEASON 1</p>
+          <h1>Scout New Talent</h1>
+          <p class="description">Build your agency, manage players and grow your reputation.</p>
+        </div>
+        <div class="selection-box">
+          <span>Signed / Selected</span>
+          <strong id="selected-count">0 / 3</strong>
+        </div>
+      </header>
+
+      <section class="agency-dashboard">
+        <div class="agency-stat"><span>AGENCY LEVEL</span><strong id="agency-tier">Beginner Agency</strong></div>
+        <div class="agency-stat"><span>AVAILABLE FUNDS</span><strong id="agency-money">€500K</strong></div>
+        <div class="agency-stat"><span>PLAYER CAPACITY</span><strong id="agency-capacity">0 / 5</strong></div>
+        <div class="agency-stat"><span>CANDIDATE OVR LIMIT</span><strong id="candidate-limit">68</strong></div>
+        <div class="upgrade-panel">
+          <div><span>NEXT UPGRADE</span><strong id="upgrade-description">Intermediate Agency · €1M</strong></div>
+          <button id="upgrade-button" class="upgrade-button" disabled>Upgrade Agency</button>
+        </div>
+      </section>
+
+      <section id="player-list" class="scout-list"></section>
+
+      <div class="bottom-actions">
+        <div class="selection-cost"><span>SELECTED SIGNING COST</span><strong id="selected-cost">€0</strong></div>
+        <button id="reroll-button" class="secondary-button">Generate New Candidates</button>
+        <button id="sign-button" class="secondary-button" disabled>Sign Selected Players</button>
+        <button id="next-season-button" class="primary-button">Next Season →</button>
+      </div>
+    </section>
+
+    <section id="inbox-view" class="game-view hidden">
+      <header class="inbox-page-header">
+        <div>
+          <p class="eyebrow">COMMUNICATIONS</p>
+          <h1>Inbox</h1>
+          <p class="description">Messages from clubs, players and your staff will appear here.</p>
+        </div>
+        <div class="inbox-page-summary">
+          <span>UNREAD MESSAGES</span>
+          <strong id="inbox-unread-count">0</strong>
+        </div>
+      </header>
+
+      <section id="inbox-section" class="inbox-section">
+        <div id="empty-inbox-message" class="empty-inbox-message">
+          <div class="empty-inbox-icon" aria-hidden="true">✉</div>
+          <strong>No messages yet.</strong>
+          <p>Club offers, contract updates and player requests will arrive here as your career develops.</p>
+          <button id="inbox-scout-button" class="primary-button" type="button">Scout Players</button>
+        </div>
+
+        <div id="inbox-layout" class="inbox-layout hidden">
+          <aside class="inbox-sidebar">
+            <div class="inbox-sidebar-header">
+              <span>MESSAGES</span>
+              <strong id="inbox-message-count">0</strong>
+            </div>
+            <div id="inbox-message-list" class="inbox-message-list"></div>
+          </aside>
+          <article id="inbox-message-detail" class="inbox-message-detail">
+            <p class="eyebrow">SELECT A MESSAGE</p>
+            <h2>Open a message</h2>
+            <p class="description">Choose a message from the list to read its details.</p>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <section id="agency-view" class="game-view hidden">
+      <header class="agency-page-header">
+        <div>
+          <p class="eyebrow">PLAYER MANAGEMENT</p>
+          <h1>My Agency</h1>
+          <p class="description">Review contracts, player status and market values.</p>
+        </div>
+        <div class="agency-page-summary"><span>MANAGED PLAYERS</span><strong id="agency-player-count">0 Players</strong></div>
+      </header>
+
+      <section class="agency-toolbar">
+        <input id="agency-search" class="agency-search" type="search" placeholder="Search players..." autocomplete="off" />
+        <select id="agency-sort" class="agency-sort">
+          <option value="overall-desc">Highest OVR</option>
+          <option value="value-desc">Highest Value</option>
+          <option value="age-asc">Youngest</option>
+          <option value="contract-asc">Contract Expiry</option>
+          <option value="name-asc">Player Name</option>
+        </select>
+      </section>
+
+      <section id="signed-section" class="signed-section">
+        <div id="empty-agency-message" class="empty-agency-message">
+          <strong>No signed players yet.</strong>
+          <p>Return to Scout and sign your first client.</p>
+          <button id="empty-scout-button" class="primary-button" type="button">Go to Scout</button>
+        </div>
+        <div id="agency-list-wrapper" class="agency-list-wrapper hidden">
+          <div class="agency-list-header"><span>PLAYER</span><span>CLUB</span><span>OVR</span><span>CONTRACT</span><span>STATUS</span><span>VALUE</span></div>
+          <div id="signed-list" class="agency-player-list"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
