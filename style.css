@@ -4327,3 +4327,69 @@ body.setup-open {
     transform: none !important;
   }
 }
+
+
+/* =========================================================
+   PC MY AGENCY — TRUE 7-COLUMN FIX
+   PLAYER | CLUB | OVR | CONTRACT | VALUE | BALLON D'OR | ACTION
+   ========================================================= */
+@media (min-width: 681px) {
+  .agency-list-header,
+  .agency-player-row {
+    display: grid !important;
+    grid-template-columns:
+      minmax(220px, 2fr)
+      minmax(120px, 1.15fr)
+      82px
+      100px
+      minmax(120px, 1fr)
+      minmax(120px, 1fr)
+      110px !important;
+    align-items: center !important;
+    column-gap: 16px !important;
+  }
+
+  /* Rating wrapper must not consume its own grid column on desktop. */
+  .agency-player-row .agency-rating-group {
+    display: contents !important;
+  }
+
+  .agency-player-row .row-player {
+    grid-column: 1 !important;
+  }
+
+  .agency-player-row .row-club {
+    grid-column: 2 !important;
+  }
+
+  .agency-player-row .row-overall {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+  }
+
+  .agency-player-row .row-contract {
+    grid-column: 4 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+  }
+
+  .agency-player-row .row-value {
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+  }
+
+  .agency-player-row .row-ballon-dor {
+    grid-column: 6 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+    min-width: 0 !important;
+  }
+
+  .agency-player-row .terminate-agency-button {
+    grid-column: 7 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+  }
+}
