@@ -3031,3 +3031,342 @@ body.setup-open {
     min-height: 46px;
   }
 }
+
+
+/* =========================================================
+   FOOTBALL AGENT — MOBILE V3
+   Compact Inbox offers + My Agency list
+   ========================================================= */
+
+@media (max-width: 680px) {
+  /* ---------- INBOX: compact transfer offers ---------- */
+
+  .inbox-message-detail {
+    padding: 14px 10px;
+  }
+
+  .club-offer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 7px;
+    margin: 14px 0 10px;
+  }
+
+  .club-offer-card {
+    min-height: 0 !important;
+    padding: 10px 11px;
+    border-radius: 11px;
+  }
+
+  .club-offer-label {
+    margin-bottom: 5px;
+    font-size: 7px;
+    letter-spacing: 0.06em;
+  }
+
+  .club-offer-name {
+    margin-bottom: 9px;
+    gap: 6px;
+    font-size: 15px;
+    line-height: 1.05;
+  }
+
+  .club-offer-name .country-flag {
+    width: 17px;
+    height: 12px;
+  }
+
+  .club-offer-details {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .club-offer-details > div {
+    min-width: 0;
+    padding: 6px;
+    border-radius: 7px;
+  }
+
+  .club-offer-details span {
+    margin-bottom: 2px;
+    font-size: 6.5px;
+    letter-spacing: 0.02em;
+  }
+
+  .club-offer-details strong {
+    display: block;
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .club-offer-action {
+    margin-top: 0;
+    padding-top: 8px;
+    font-size: 10px;
+  }
+
+  /* Transfer-offer detail card */
+  .transfer-offer-card {
+    margin-top: 12px;
+    padding: 11px;
+    border-radius: 11px;
+  }
+
+  .transfer-offer-club {
+    gap: 8px;
+  }
+
+  .transfer-offer-club strong {
+    gap: 6px;
+    font-size: 14px;
+  }
+
+  .transfer-offer-club > span {
+    font-size: 9px;
+  }
+
+  .transfer-offer-main {
+    margin: 12px 0;
+  }
+
+  .transfer-offer-main small {
+    margin-bottom: 3px;
+    font-size: 8px;
+  }
+
+  .transfer-offer-main strong {
+    font-size: 24px;
+  }
+
+  .transfer-offer-info {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .transfer-offer-info span {
+    gap: 2px;
+    font-size: 8px;
+  }
+
+  .transfer-offer-info strong {
+    font-size: 11px;
+  }
+
+  .transfer-offer-actions {
+    gap: 7px;
+    margin-top: 12px;
+  }
+
+  .transfer-accept-button,
+  .transfer-reject-button {
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+
+  /* ---------- MY AGENCY: true mobile list ---------- */
+
+  #agency-view {
+    overflow-x: hidden;
+  }
+
+  .agency-page-header {
+    margin-bottom: 12px;
+  }
+
+  .agency-page-header .description {
+    display: none;
+  }
+
+  .agency-page-summary {
+    padding: 8px 10px;
+  }
+
+  .agency-page-summary span {
+    font-size: 8px;
+  }
+
+  .agency-page-summary strong {
+    font-size: 16px;
+  }
+
+  .agency-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 122px;
+    gap: 6px;
+  }
+
+  .agency-search,
+  .agency-sort {
+    min-height: 38px;
+    font-size: 12px;
+  }
+
+  .agency-sort {
+    min-width: 0;
+    padding: 0 7px;
+  }
+
+  .agency-list-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden !important;
+  }
+
+  .agency-player-list {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .agency-player-row {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+
+    padding: 9px 10px;
+
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr)
+      46px
+      52px;
+
+    grid-template-areas:
+      "player overall contract"
+      "club status status"
+      "value ballon terminate";
+
+    align-items: center;
+    gap: 5px 7px;
+
+    border: 1px solid var(--border);
+    border-radius: 11px;
+  }
+
+  .row-player {
+    grid-area: player;
+    min-width: 0;
+  }
+
+  .row-player-name {
+    min-width: 0;
+    gap: 5px;
+  }
+
+  .row-player-name .country-flag {
+    width: 16px;
+    height: 11px;
+  }
+
+  .row-player strong {
+    margin-bottom: 1px;
+    font-size: 12px;
+    line-height: 1.05;
+  }
+
+  .row-player small {
+    font-size: 8px;
+    line-height: 1.05;
+  }
+
+  .row-club {
+    grid-area: club;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row-overall {
+    grid-area: overall;
+    width: 42px;
+    height: 30px;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  .row-contract {
+    grid-area: contract;
+    justify-self: end;
+    font-size: 9px;
+  }
+
+  .row-status {
+    grid-area: status;
+    justify-self: end;
+    max-width: 100%;
+    padding: 4px 6px;
+    overflow: hidden;
+    font-size: 8px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row-value {
+    grid-area: value;
+    min-width: 0;
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .row-ballon-dor {
+    grid-area: ballon;
+    justify-self: end;
+    font-size: 8px;
+    white-space: nowrap;
+  }
+
+  .terminate-agency-button,
+  .terminate-contract-button {
+    grid-area: terminate;
+
+    width: auto !important;
+    min-width: 0;
+    min-height: 28px;
+
+    justify-self: end !important;
+
+    margin: 0;
+    padding: 5px 7px;
+
+    border-radius: 7px;
+
+    font-size: 8px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 390px) {
+  .agency-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .agency-player-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      42px
+      46px;
+
+    gap: 5px;
+    padding: 8px;
+  }
+
+  .row-player strong {
+    font-size: 11px;
+  }
+
+  .row-status {
+    max-width: 120px;
+  }
+
+  .club-offer-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
