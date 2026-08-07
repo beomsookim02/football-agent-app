@@ -4393,3 +4393,17 @@ body.setup-open {
     justify-self: end !important;
   }
 }
+
+
+/* =========================================================
+   PC MY AGENCY — OVR / CONTRACT MICRO ALIGNMENT
+   ========================================================= */
+@media (min-width: 681px) {
+  .agency-player-row .row-overall {
+    transform: translateX(-7px) !important;
+  }
+
+  .agency-player-row .row-contract {
+    transform: translateX(9px) !important;
+  }
+}
