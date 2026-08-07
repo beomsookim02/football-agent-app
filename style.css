@@ -4415,7 +4415,7 @@ body.setup-open {
 @media (min-width: 681px) {
   /* Move only the PLAYER header text, not the player rows. */
   .agency-list-header > span:nth-child(1) {
-    transform: translateX(10px) !important;
+    transform: translateX(20px) !important;
   }
 
   /* Move the OVR value a little farther left. */
