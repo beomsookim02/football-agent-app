@@ -714,6 +714,104 @@ const clubs = [
 const AGENT_PROFILE_STORAGE_KEY = "footballAgentProfile";
 const GAME_STATE_STORAGE_KEY = "footballAgentGameState";
 
+const ANALYTICS_USER_ID_KEY = "footballAgentAnalyticsUserId";
+
+function getAnalyticsUserId() {
+  let userId = localStorage.getItem(ANALYTICS_USER_ID_KEY);
+
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem(ANALYTICS_USER_ID_KEY, userId);
+  }
+
+  return userId;
+}
+
+const analyticsUserId = getAnalyticsUserId();
+
+const SUPABASE_URL = "https://fqpldtbwnuchzgryorir.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_728F0JUKfDcm4d75Asnfzw_Gp3MbinV";
+
+const supabaseClient = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
+async function registerAnalyticsSession() {
+  try {
+    const { error } = await supabaseClient.rpc("register_player_session", {
+      p_user_id: analyticsUserId,
+      p_season: currentSeason,
+    });
+
+    if (error) {
+      console.warn("Analytics session registration failed.", error);
+      return;
+    }
+  } catch (error) {
+    console.warn("Analytics session registration failed.", error);
+  }
+}
+async function updateAnalyticsMaxSeason() {
+  try {
+    const { error } = await supabaseClient.rpc("update_player_max_season", {
+      p_user_id: analyticsUserId,
+      p_season: currentSeason,
+    });
+
+    if (error) {
+      console.warn("Analytics season update failed.", error);
+      return;
+    }
+
+  } catch (error) {
+    console.warn("Analytics season update failed.", error);
+  }
+}
+let analyticsActiveSeconds = 0;
+
+setInterval(() => {
+  if (!document.hidden) {
+    analyticsActiveSeconds += 30;
+  }
+}, 30000);
+
+async function flushAnalyticsPlaytime() {
+  if (analyticsActiveSeconds <= 0) return;
+
+  const secondsToSend = analyticsActiveSeconds;
+  analyticsActiveSeconds = 0;
+
+  try {
+    const { error } = await supabaseClient.rpc("add_player_playtime", {
+      p_user_id: analyticsUserId,
+      p_seconds: secondsToSend,
+    });
+
+    if (error) {
+      analyticsActiveSeconds += secondsToSend;
+      console.warn("Analytics playtime update failed.", error);
+      return;
+    }
+
+  } catch (error) {
+    analyticsActiveSeconds += secondsToSend;
+    console.warn("Analytics playtime update failed.", error);
+  }
+}
+setInterval(() => {
+  void flushAnalyticsPlaytime();
+}, 120000);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    void flushAnalyticsPlaytime();
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  void flushAnalyticsPlaytime();
+});
+
 const nationalityCountryCodes = [
   "AF","AL","DZ","AD","AO","AG","AR","AM","AU","AT","AZ","BS","BH","BD","BB","BY","BE","BZ","BJ","BT","BO","BA","BW","BR","BN","BG","BF","BI","CV","KH","CM","CA","CF","TD","CL","CN","CO","KM","CG","CD","CR","CI","HR","CU","CY","CZ","DK","DJ","DM","DO","EC","EG","SV","GQ","ER","EE","SZ","ET","FJ","FI","FR","GA","GM","GE","DE","GH","GR","GD","GT","GN","GW","GY","HT","HN","HU","IS","IN","ID","IR","IQ","IE","IL","IT","JM","JP","JO","KZ","KE","KI","KP","KR","KW","KG","LA","LV","LB","LS","LR","LY","LI","LT","LU","MG","MW","MY","MV","ML","MT","MH","MR","MU","MX","FM","MD","MC","MN","ME","MA","MZ","MM","NA","NR","NP","NL","NZ","NI","NE","NG","MK","NO","OM","PK","PW","PA","PG","PY","PE","PH","PL","PT","QA","RO","RU","RW","KN","LC","VC","WS","SM","ST","SA","SN","RS","SC","SL","SG","SK","SI","SB","SO","ZA","SS","ES","LK","SD","SR","SE","CH","SY","TW","TJ","TZ","TH","TL","TG","TO","TT","TN","TR","TM","TV","UG","UA","AE","GB-ENG","US","UY","UZ","VU","VA","VE","VN","YE","ZM","ZW"
 ];
@@ -5371,6 +5469,8 @@ async function advanceToNextSeason() {
 
   currentSeason += 1;
 
+  void updateAnalyticsMaxSeason();
+
   // Inbox contains only the current season's work and updates.
   inboxMessages = [];
   activeClubOffers = null;
@@ -5501,6 +5601,8 @@ populateNationalityOptions();
 loadAgentProfile();
 
 const hasSavedGame = loadGameState();
+
+void registerAnalyticsSession();
 
 seasonLabelElement.textContent =
     `SEASON ${currentSeason} / ${MAX_SEASONS}`;
