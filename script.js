@@ -711,10 +711,72 @@ const clubs = [
   { name: "Kobe", country: "Japan", level: 65 },
 ];
 
-const AGENT_PROFILE_STORAGE_KEY = "footballAgentProfile";
-const GAME_STATE_STORAGE_KEY = "footballAgentGameState";
+const AGENT_PROFILE_STORAGE_KEY = "footballAgentAppProfile";
+const ENDLESS_GAME_STATE_STORAGE_KEY = "footballAgentAppEndlessGameState";
+const CHALLENGE_GAME_STATE_STORAGE_KEY = "footballAgentAppChallengeGameState";
+const LEGACY_GAME_STATE_STORAGE_KEY = "footballAgentAppGameState";
+const ANALYTICS_USER_ID_KEY = "footballAgentAppAnalyticsUserId";
 
-const ANALYTICS_USER_ID_KEY = "footballAgentAnalyticsUserId";
+function getGameStateStorageKey(mode = careerMode) {
+  return mode === "challenge"
+    ? CHALLENGE_GAME_STATE_STORAGE_KEY
+    : ENDLESS_GAME_STATE_STORAGE_KEY;
+}
+
+function getSavedCareerSummary(mode) {
+  try {
+    const savedState = JSON.parse(
+      localStorage.getItem(getGameStateStorageKey(mode)),
+    );
+
+    if (!savedState || savedState.version !== 1) {
+      return null;
+    }
+
+    return {
+      season: Number(savedState.currentSeason) || 1,
+      tierIndex: Number(savedState.currentAgencyTierIndex) || 0,
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function migrateLegacyCareerSave() {
+  if (
+    localStorage.getItem(ENDLESS_GAME_STATE_STORAGE_KEY) ||
+    localStorage.getItem(CHALLENGE_GAME_STATE_STORAGE_KEY)
+  ) {
+    return;
+  }
+
+  try {
+    const legacyState = JSON.parse(
+      localStorage.getItem(LEGACY_GAME_STATE_STORAGE_KEY),
+    );
+
+    if (!legacyState || legacyState.version !== 1) {
+      return;
+    }
+
+    const legacyMode =
+      legacyState.careerMode === "challenge"
+        ? "challenge"
+        : "endless";
+
+    localStorage.setItem(
+      getGameStateStorageKey(legacyMode),
+      JSON.stringify({
+        ...legacyState,
+        careerMode: legacyMode,
+      }),
+    );
+
+    localStorage.removeItem(LEGACY_GAME_STATE_STORAGE_KEY);
+  } catch (error) {
+    console.warn("Could not migrate legacy career save.", error);
+  }
+}
 
 function getAnalyticsUserId() {
   let userId = localStorage.getItem(ANALYTICS_USER_ID_KEY);
@@ -889,6 +951,7 @@ const navAgentName = document.querySelector("#nav-agent-name");
 const navAgentCountry = document.querySelector("#nav-agent-country");
 
 let agentProfile = null;
+let careerMode = null;
 
 function populateNationalityOptions() {
   const options = nationalityCountryCodes
@@ -921,6 +984,37 @@ function updateAgentPreview() {
   agentPreviewCountry.textContent = code ? getNationalityName(code) : "Choose nationality";
 }
 
+function updateGoatProfileDecoration() {
+  if (!agentProfileButton) return;
+
+  const active = Boolean(goatUnlocked || GOAT_PREVIEW);
+  agentProfileButton.classList.toggle("goat-profile-unlocked", active);
+
+  let decoration =
+    agentProfileButton.querySelector(".goat-profile-decoration");
+
+  if (!active) {
+    decoration?.remove();
+    return;
+  }
+
+  if (!decoration) {
+    decoration = document.createElement("span");
+    decoration.className = "goat-profile-decoration";
+    decoration.setAttribute("aria-hidden", "true");
+    decoration.innerHTML = `
+      <span class="goat-profile-ornament">
+        <span class="goat-profile-line goat-profile-line-left"></span>
+        <span class="goat-profile-laurel goat-profile-laurel-left">❧</span>
+        <span class="goat-profile-crown">♛</span>
+        <span class="goat-profile-laurel goat-profile-laurel-right">❧</span>
+        <span class="goat-profile-line goat-profile-line-right"></span>
+      </span>
+    `;
+    agentProfileButton.appendChild(decoration);
+  }
+}
+
 function renderAgentProfile() {
   if (!agentProfile) return;
 
@@ -930,6 +1024,7 @@ function renderAgentProfile() {
   );
   navAgentName.textContent = agentProfile.name;
   navAgentCountry.textContent = agentProfile.nationality;
+  updateGoatProfileDecoration();
 }
 
 function openCareerSetup() {
@@ -967,7 +1062,7 @@ function loadAgentProfile() {
   return false;
 }
 
-careerSetupForm.addEventListener("submit", (event) => {
+careerSetupForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const name = agentNameInput.value.trim();
@@ -984,20 +1079,18 @@ careerSetupForm.addEventListener("submit", (event) => {
   };
 
   localStorage.setItem(AGENT_PROFILE_STORAGE_KEY, JSON.stringify(agentProfile));
-  renderAgentProfile();
-  closeCareerSetup();
-  showView("scout");
+renderAgentProfile();
+closeCareerSetup();
 
-  if (isNewCareerProfile) {
-    void showGameDialog({
-      eyebrow: "YOUR CAREER",
-      title: "Your Career Begins",
-      message:
-        "You have 30 seasons to build the world's greatest football agency. Sign players, complete transfers, grow your reputation, and guide your clients to the Ballon d'Or.",
-      confirmLabel: "START YOUR JOURNEY",
-      tone: "default",
-    });
-  }
+if (isNewCareerProfile) {
+  resetRuntimeCareerState("endless");
+  generateCandidates();
+  saveGameState();
+  showMainMenu();
+  return;
+}
+
+showView("scout");
 });
 
 agentNameInput.addEventListener("input", updateAgentPreview);
@@ -1084,13 +1177,233 @@ function showGameDialog({
     });
   });
 }
+function showEndlessResetDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "game-dialog-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "game-dialog-modal game-dialog-danger endless-reset-dialog";
+
+    modal.innerHTML = `
+      <p class="game-dialog-eyebrow">CAREER RESET</p>
+      <h2 class="game-dialog-title">Reset Endless Career?</h2>
+      <p class="game-dialog-message">
+        This will permanently delete your Endless Career progress.
+        Your 30-Season Challenge and agent profile will not be affected.
+      </p>
+
+      <label class="endless-reset-field">
+        <span>TYPE <strong>FOOTBALL</strong> TO CONFIRM</span>
+        <input
+          class="endless-reset-input"
+          type="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          placeholder="FOOTBALL"
+        />
+      </label>
+
+      <div class="game-dialog-actions">
+        <button
+          class="game-dialog-button game-dialog-cancel"
+          type="button"
+        >
+          KEEP PLAYING
+        </button>
+        <button
+          class="game-dialog-button game-dialog-confirm"
+          type="button"
+          disabled
+        >
+          RESET CAREER
+        </button>
+      </div>
+    `;
+
+    const input = modal.querySelector(".endless-reset-input");
+    const confirmButton = modal.querySelector(".game-dialog-confirm");
+    const cancelButton = modal.querySelector(".game-dialog-cancel");
+
+    const updateConfirmState = () => {
+      confirmButton.disabled =
+        input.value.trim().toUpperCase() !== "FOOTBALL";
+    };
+
+    const close = (result) => {
+      overlay.remove();
+      document.body.style.overflow = "";
+      resolve(result);
+    };
+
+    input.addEventListener("input", updateConfirmState);
+
+    confirmButton.addEventListener("click", () => {
+      if (!confirmButton.disabled) {
+        close(true);
+      }
+    });
+
+    cancelButton.addEventListener("click", () => close(false));
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        close(false);
+      }
+    });
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    requestAnimationFrame(() => input.focus());
+  });
+}
+
+function showCareerModeDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "game-dialog-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "game-dialog-modal";
+
+    const endlessSave = getSavedCareerSummary("endless");
+    const challengeSave = getSavedCareerSummary("challenge");
+
+    modal.innerHTML = `
+      <p class="game-dialog-eyebrow">CHOOSE YOUR CAREER</p>
+      <h2 class="game-dialog-title">Select Career Mode</h2>
+
+      <div class="career-mode-options">
+        <button
+          class="career-mode-card"
+          type="button"
+          data-mode="endless"
+        >
+          <strong>ENDLESS CAREER</strong>
+          <span>
+            Build your football agency with no season limit.
+          </span>
+          <small class="career-mode-status">
+            ${
+              endlessSave
+                ? `CONTINUE · SEASON ${endlessSave.season}`
+                : "START NEW CAREER"
+            }
+          </small>
+        </button>
+
+        <button
+          class="career-mode-card"
+          type="button"
+          data-mode="challenge"
+        >
+          <strong>30-SEASON CHALLENGE</strong>
+          <span>
+            Build the greatest agency possible within 30 seasons.
+          </span>
+          <small class="career-mode-status">
+            ${
+              challengeSave
+                ? `CONTINUE · SEASON ${challengeSave.season} / ${MAX_SEASONS}`
+                : "START NEW CAREER"
+            }
+          </small>
+        </button>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    modal
+      .querySelectorAll(".career-mode-card")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const selectedMode = button.dataset.mode;
+
+          overlay.remove();
+          document.body.style.overflow = "";
+
+          resolve(selectedMode);
+        });
+      });
+  });
+}
+
+function resetRuntimeCareerState(mode) {
+  careerMode = mode;
+  currentSeason = 1;
+  currentAgencyTierIndex = 0;
+  agencyMoney = STARTING_MONEY;
+  agencyReputation = 0;
+  candidates = [];
+  selectedIds = new Set();
+  signedPlayers = [];
+  signingsThisSeason = 0;
+  completedClubContracts = 0;
+  inboxMessages = [];
+  activeClubOffers = null;
+  rerollsUsed = 0;
+  ballonDorHistory = [];
+  recordTransfer = null;
+  hiddenBadges = {};
+  goatUnlocked = false;
+  goatRevealShown = false;
+  goatRevealActive = false;
+  goatPreviewShownSession = false;
+  badgeUnlocksShown = {};
+  badgeUnlockQueue = [];
+  badgeUnlockRevealActive = false;
+  badgeUnlockTrackingReady = true;
+  updateGoatProfileDecoration();
+}
+
+function refreshCareerScreen() {
+  seasonLabelElement.textContent =
+    careerMode === "challenge"
+      ? `SEASON ${currentSeason} / ${MAX_SEASONS}`
+      : `SEASON ${currentSeason}`;
+
+  if (candidates.length === 0) {
+    generateCandidates();
+  }
+
+  clearInboxDetail();
+  renderCandidates();
+  renderSignedPlayers();
+  updateInterface();
+  showView("scout");
+}
+
+async function switchCareerMode(selectedMode) {
+  if (careerMode) {
+    saveGameState();
+  }
+
+  resetRuntimeCareerState(selectedMode);
+
+  const hasSavedCareer = loadGameState(selectedMode);
+
+  if (!hasSavedCareer) {
+    generateCandidates();
+    saveGameState();
+  }
+
+  refreshCareerScreen();
+
+  return hasSavedCareer;
+}
 
 const tryAgainButton = document.createElement("button");
 
 tryAgainButton.type = "button";
 tryAgainButton.className = "try-again-button";
 tryAgainButton.textContent = "Try Again";
-tryAgainButton.title = "Restart the challenge from Season 1";
+tryAgainButton.title = "Restart the current career from Season 1";
 
 tryAgainButton.style.width = "auto";
 tryAgainButton.style.minWidth = "0";
@@ -1111,29 +1424,298 @@ agentProfileButton.insertAdjacentElement(
   tryAgainButton,
 );
 
-tryAgainButton.addEventListener("click", async () => {
-  const confirmed = await showGameDialog({
-    eyebrow: "CAREER RESET",
-    title: "Start Over?",
-    message:
-      "Your current career progress will be permanently deleted and the game will return to Season 1.",
-    confirmLabel: "START AGAIN",
-    cancelLabel: "KEEP PLAYING",
-    tone: "danger",
+
+function showHowToPlay() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "how-to-play-overlay";
+
+    overlay.innerHTML = `
+      <section class="how-to-play-panel" role="dialog" aria-modal="true" aria-labelledby="how-to-play-title">
+        <div class="how-to-play-header">
+          <div>
+            <p class="how-to-play-eyebrow">HOW TO PLAY</p>
+            <h2 id="how-to-play-title">Build Your Agency</h2>
+            <p class="how-to-play-intro">
+              Start small, guide player careers and grow into a legendary football agency.
+            </p>
+          </div>
+
+          <button
+            class="how-to-play-close"
+            type="button"
+            aria-label="Close How to Play"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="how-to-play-steps">
+          <article class="how-to-play-step">
+            <span class="how-to-play-number">01</span>
+            <div>
+              <strong>SCOUT PLAYERS</strong>
+              <p>
+                Review new candidates each season and sign the players you want to represent.
+              </p>
+            </div>
+          </article>
+
+          <article class="how-to-play-step">
+            <span class="how-to-play-number">02</span>
+            <div>
+              <strong>BUILD YOUR AGENCY</strong>
+              <p>
+                Earn money, complete club contracts and manage stronger players to unlock higher agency levels.
+              </p>
+            </div>
+          </article>
+
+          <article class="how-to-play-step">
+            <span class="how-to-play-number">03</span>
+            <div>
+              <strong>MANAGE CAREERS</strong>
+              <p>
+                Handle transfer offers, contracts, retirements and important messages through your Inbox.
+              </p>
+            </div>
+          </article>
+
+          <article class="how-to-play-step">
+            <span class="how-to-play-number">04</span>
+            <div>
+              <strong>BECOME LEGENDARY</strong>
+              <p>
+                Represent elite players, chase the Ballon d'Or and build the strongest agency you can.
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <div class="how-to-play-modes">
+          <article class="how-to-play-mode how-to-play-mode-endless">
+            <small>ENDLESS CAREER</small>
+            <strong>No season limit</strong>
+            <p>Keep building your agency for as long as you want.</p>
+          </article>
+
+          <article class="how-to-play-mode">
+            <small>30-SEASON CHALLENGE</small>
+            <strong>30 seasons</strong>
+            <p>Build the greatest agency possible before the career ends.</p>
+          </article>
+        </div>
+
+        <button class="how-to-play-confirm" type="button">
+          GOT IT
+        </button>
+      </section>
+    `;
+
+    const close = () => {
+      overlay.remove();
+      document.body.style.overflow = "";
+      resolve(true);
+    };
+
+    overlay
+      .querySelector(".how-to-play-close")
+      .addEventListener("click", close);
+
+    overlay
+      .querySelector(".how-to-play-confirm")
+      .addEventListener("click", close);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        close();
+      }
+    });
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
   });
+}
+
+
+function ensureMainMenu() {
+  let menu = document.querySelector("#app-main-menu");
+
+  if (menu) {
+    return menu;
+  }
+
+  menu = document.createElement("div");
+  menu.id = "app-main-menu";
+  menu.className = "app-main-menu hidden";
+
+  menu.innerHTML = `
+    <div class="app-main-menu-card">
+      <p class="app-main-menu-eyebrow">FOOTBALL MANAGEMENT SIM</p>
+      <h1 class="app-main-menu-title">FOOTBALL<br />AGENT</h1>
+      <p class="app-main-menu-description">
+        Build your agency. Shape careers.
+      </p>
+
+      <button
+        id="main-menu-play"
+        class="app-main-menu-play"
+        type="button"
+      >
+        PLAY
+      </button>
+
+      <div class="app-main-menu-secondary">
+        <button id="main-menu-how" type="button">HOW TO PLAY</button>
+        <button id="main-menu-settings" type="button">SETTINGS</button>
+      </div>
+
+      <div class="app-main-menu-profile">
+        <span id="main-menu-agent-flag"></span>
+        <div>
+          <small>AGENT PROFILE</small>
+          <strong id="main-menu-agent-name">—</strong>
+          <span id="main-menu-agent-country">—</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(menu);
+
+  menu
+    .querySelector("#main-menu-play")
+    .addEventListener("click", async () => {
+      hideMainMenu();
+
+      const selectedMode = await showCareerModeDialog();
+
+      if (!selectedMode) {
+        showMainMenu();
+        return;
+      }
+
+      await switchCareerMode(selectedMode);
+      void registerAnalyticsSession();
+    });
+
+  menu
+    .querySelector("#main-menu-how")
+    .addEventListener("click", () => {
+      void showHowToPlay();
+    });
+
+  menu
+    .querySelector("#main-menu-settings")
+    .addEventListener("click", () => {
+      void showGameDialog({
+        eyebrow: "SETTINGS",
+        title: "Settings",
+        message:
+          "More app settings can be added here later. Your career saves are stored automatically on this device.",
+        confirmLabel: "CLOSE",
+        tone: "default",
+      });
+    });
+
+  return menu;
+}
+
+function updateMainMenuProfile() {
+  const menu = ensureMainMenu();
+
+  const flag = menu.querySelector("#main-menu-agent-flag");
+  const name = menu.querySelector("#main-menu-agent-name");
+  const country = menu.querySelector("#main-menu-agent-country");
+
+  if (!agentProfile) {
+    flag.innerHTML = "";
+    name.textContent = "New Agent";
+    country.textContent = "Create your profile to begin";
+    return;
+  }
+
+  flag.innerHTML = getAgentFlagImage(
+  agentProfile.countryCode,
+  "app-main-menu-flag-image",
+);
+  name.textContent = agentProfile.name || "Agent";
+  country.textContent =
+  agentProfile.nationality ||
+  getNationalityName(agentProfile.countryCode);
+}
+
+function showMainMenu() {
+  const menu = ensureMainMenu();
+  updateMainMenuProfile();
+
+  menu.classList.remove("hidden");
+  document.body.classList.add("main-menu-open");
+}
+
+function hideMainMenu() {
+  const menu = ensureMainMenu();
+
+  menu.classList.add("hidden");
+  document.body.classList.remove("main-menu-open");
+}
+
+const careerMenuButton = document.createElement("button");
+careerMenuButton.type = "button";
+careerMenuButton.className = "career-menu-button";
+careerMenuButton.textContent = "Career Menu";
+careerMenuButton.title = "Switch between your saved careers";
+
+tryAgainButton.insertAdjacentElement(
+  "afterend",
+  careerMenuButton,
+);
+
+careerMenuButton.addEventListener("click", async () => {
+  saveGameState();
+
+  const selectedMode = await showCareerModeDialog();
+
+  if (!selectedMode || selectedMode === careerMode) {
+    return;
+  }
+
+  await switchCareerMode(selectedMode);
+});
+
+tryAgainButton.addEventListener("click", async () => {
+  const confirmed =
+    careerMode === "endless"
+      ? await showEndlessResetDialog()
+      : await showGameDialog({
+          eyebrow: "CAREER RESET",
+          title: "Start Over?",
+          message:
+            "Your current 30-Season Challenge progress will be permanently deleted and the game will return to Season 1.",
+          confirmLabel: "START AGAIN",
+          cancelLabel: "KEEP PLAYING",
+          tone: "danger",
+        });
 
   if (!confirmed) {
     return;
   }
 
   isResettingCareer = true;
-  localStorage.removeItem(GAME_STATE_STORAGE_KEY);
-  window.location.reload();
+  localStorage.removeItem(getGameStateStorageKey());
+
+  resetRuntimeCareerState(careerMode);
+  generateCandidates();
+
+  isResettingCareer = false;
+  saveGameState();
+  refreshCareerScreen();
 });
 
 let currentSeason = 1;
 let currentAgencyTierIndex = 0;
 let agencyMoney = STARTING_MONEY;
+let agencyReputation = 0;
 
 let candidates = [];
 let selectedIds = new Set();
@@ -1145,6 +1727,20 @@ let activeClubOffers = null;
 let rerollsUsed = 0;
 let isResettingCareer = false;
 let ballonDorHistory = [];
+let recordTransfer = null;
+let hiddenBadges = {};
+let goatUnlocked = false;
+let goatRevealShown = false;
+let goatRevealActive = false;
+let goatPreviewShownSession = false;
+let badgeUnlocksShown = {};
+let badgeUnlockQueue = [];
+let badgeUnlockRevealActive = false;
+let badgeUnlockTrackingReady = true;
+
+const GOAT_PREVIEW = false;
+const BADGE_PREVIEW = false;
+let badgePreviewShownSession = false;
 
 function saveGameState() {
   if (isResettingCareer) {
@@ -1153,9 +1749,11 @@ function saveGameState() {
   try {
     const gameState = {
       version: 1,
+      careerMode,
       currentSeason,
       currentAgencyTierIndex,
       agencyMoney,
+      agencyReputation,
       candidates,
       selectedIds: [...selectedIds],
       signedPlayers,
@@ -1165,10 +1763,16 @@ function saveGameState() {
       activeClubOffers,
       rerollsUsed,
       ballonDorHistory,
+      recordTransfer,
+      hiddenBadges,
+      goatUnlocked,
+      goatRevealShown,
+      badgeUnlocksShown,
+      badgeUnlockTrackingReady,
     };
 
     localStorage.setItem(
-      GAME_STATE_STORAGE_KEY,
+      getGameStateStorageKey(),
       JSON.stringify(gameState),
     );
   } catch (error) {
@@ -1176,18 +1780,22 @@ function saveGameState() {
   }
 }
 
-function loadGameState() {
+function loadGameState(mode = careerMode) {
   try {
     const savedState = JSON.parse(
-      localStorage.getItem(GAME_STATE_STORAGE_KEY),
+      localStorage.getItem(getGameStateStorageKey(mode)),
     );
 
     if (!savedState || savedState.version !== 1) {
       return false;
     }
 
-    currentSeason = Number(savedState.currentSeason) || 1;
-    currentAgencyTierIndex = Math.max(
+    careerMode =
+      mode === "challenge" ? "challenge" : "endless";
+
+currentSeason = Number(savedState.currentSeason) || 1;
+
+currentAgencyTierIndex = Math.max(
       0,
       Math.min(
         Number(savedState.currentAgencyTierIndex) || 0,
@@ -1197,6 +1805,9 @@ function loadGameState() {
     agencyMoney = Number.isFinite(savedState.agencyMoney)
       ? savedState.agencyMoney
       : STARTING_MONEY;
+    agencyReputation = Number.isFinite(savedState.agencyReputation)
+      ? savedState.agencyReputation
+      : 0;
     candidates = Array.isArray(savedState.candidates)
       ? savedState.candidates
       : [];
@@ -1242,7 +1853,8 @@ function loadGameState() {
           (message) =>
             message.type === "contract-expired" ||
             message.type === "transfer-offer" ||
-            message.type === "retirement",
+            message.type === "retirement" ||
+            message.type === "agency-event",
         )
       : [];
     activeClubOffers = savedState.activeClubOffers || null;
@@ -1250,6 +1862,27 @@ function loadGameState() {
     ballonDorHistory = Array.isArray(savedState.ballonDorHistory)
       ? savedState.ballonDorHistory
       : [];
+    recordTransfer =
+      savedState.recordTransfer &&
+      savedState.recordTransfer.recordType === "paid-transfer" &&
+      Number.isFinite(savedState.recordTransfer.transferFee) &&
+      savedState.recordTransfer.transferFee > 0
+        ? savedState.recordTransfer
+        : null;
+    hiddenBadges =
+      savedState.hiddenBadges && typeof savedState.hiddenBadges === "object"
+        ? savedState.hiddenBadges
+        : {};
+    goatUnlocked = Boolean(savedState.goatUnlocked);
+    goatRevealShown = Boolean(savedState.goatRevealShown);
+    badgeUnlocksShown =
+      savedState.badgeUnlocksShown &&
+      typeof savedState.badgeUnlocksShown === "object"
+        ? savedState.badgeUnlocksShown
+        : {};
+    badgeUnlockTrackingReady =
+      savedState.badgeUnlockTrackingReady === true ||
+      Boolean(savedState.badgeUnlocksShown);
 
     return true;
   } catch (error) {
@@ -1388,6 +2021,1281 @@ const emptyScoutButton =
     "#empty-scout-button",
   );
 
+function ensureReputationDisplay() {
+  let reputationBar = document.querySelector("#nav-reputation");
+
+  if (reputationBar) {
+    return reputationBar;
+  }
+
+  const navInner = document.querySelector(".nav-inner");
+  const navBrandWrap = document.querySelector(".nav-brand-wrap");
+
+  if (!navInner || !navBrandWrap) {
+    return null;
+  }
+
+  reputationBar = document.createElement("div");
+  reputationBar.id = "nav-reputation";
+  reputationBar.className = "nav-reputation";
+  reputationBar.innerHTML = `
+    <span>REPUTATION</span>
+    <strong id="nav-reputation-value">0</strong>
+  `;
+
+  navBrandWrap.insertAdjacentElement("afterend", reputationBar);
+
+  return reputationBar;
+}
+
+function renderReputation() {
+  const existingReputationBar =
+    document.querySelector("#nav-reputation");
+
+  if (careerMode !== "endless") {
+    existingReputationBar?.remove();
+    return;
+  }
+
+  const reputationBar = ensureReputationDisplay();
+
+  if (!reputationBar) {
+    return;
+  }
+
+  const valueElement =
+    reputationBar.querySelector("#nav-reputation-value");
+
+  if (valueElement) {
+    valueElement.textContent = Math.max(
+      0,
+      Math.floor(Number(agencyReputation) || 0),
+    ).toLocaleString();
+  }
+}
+
+function ensureLegacyInterface() {
+  const existingLegacyButton =
+    document.querySelector("#legacy-button");
+
+  if (careerMode !== "endless") {
+    existingLegacyButton?.remove();
+
+    const actionWrap =
+      agencyView?.querySelector(".agency-page-header-actions");
+
+    if (actionWrap) {
+      const agencyHeader =
+        agencyView?.querySelector(".agency-page-header");
+      const agencySummary =
+        actionWrap.querySelector(".agency-page-summary");
+
+      if (agencyHeader && agencySummary) {
+        agencyHeader.appendChild(agencySummary);
+      }
+
+      actionWrap.remove();
+    }
+
+    closeLegacyOverlay();
+    return null;
+  }
+
+  let legacyButton = existingLegacyButton;
+
+  if (!legacyButton) {
+    const agencyHeader =
+      agencyView?.querySelector(".agency-page-header");
+    const agencySummary =
+      agencyHeader?.querySelector(".agency-page-summary");
+
+    if (agencyHeader && agencySummary) {
+      let actionWrap =
+        agencyHeader.querySelector(".agency-page-header-actions");
+
+      if (!actionWrap) {
+        actionWrap = document.createElement("div");
+        actionWrap.className = "agency-page-header-actions";
+
+        agencySummary.insertAdjacentElement(
+          "beforebegin",
+          actionWrap,
+        );
+        actionWrap.appendChild(agencySummary);
+      }
+
+      legacyButton = document.createElement("button");
+      legacyButton.id = "legacy-button";
+      legacyButton.className = "legacy-button";
+      legacyButton.type = "button";
+      legacyButton.innerHTML = `
+        <span>LEGACY</span>
+        <strong>View Career Legacy →</strong>
+      `;
+
+      actionWrap.appendChild(legacyButton);
+    }
+  }
+
+  if (
+    legacyButton &&
+    !legacyButton.dataset.legacyBound
+  ) {
+    legacyButton.dataset.legacyBound = "true";
+    legacyButton.addEventListener("click", () => {
+      openLegacyHub();
+    });
+  }
+
+  return legacyButton;
+}
+
+function ensureLegacyOverlay() {
+  let overlay = document.querySelector("#legacy-overlay");
+
+  if (overlay) {
+    return overlay;
+  }
+
+  overlay = document.createElement("div");
+  overlay.id = "legacy-overlay";
+  overlay.className = "legacy-overlay hidden";
+
+  overlay.innerHTML = `
+    <section
+      class="legacy-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="legacy-title"
+    >
+      <div class="legacy-topbar">
+        <button
+          class="legacy-close"
+          type="button"
+          aria-label="Close Legacy"
+        >
+          ×
+        </button>
+
+        <div>
+          <p class="legacy-eyebrow">YOUR CAREER</p>
+          <h2 id="legacy-title">Legacy</h2>
+        </div>
+
+      </div>
+
+      <div id="legacy-content" class="legacy-content"></div>
+    </section>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay
+    .querySelector(".legacy-close")
+    .addEventListener("click", closeLegacyOverlay);
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) {
+      closeLegacyOverlay();
+    }
+  });
+
+  return overlay;
+}
+
+function openLegacyHub() {
+  if (careerMode !== "endless") {
+    return;
+  }
+
+  const overlay = ensureLegacyOverlay();
+  const content = overlay.querySelector("#legacy-content");
+  content.innerHTML = `
+    <div class="legacy-hub-copy">
+      <p>
+        Track the achievements and records that define your career.
+      </p>
+    </div>
+
+    <div class="legacy-option-grid">
+      <button
+        class="legacy-option-card"
+        type="button"
+        data-legacy-page="milestones"
+      >
+        <span class="legacy-option-icon">🏆</span>
+        <small>ACHIEVEMENTS</small>
+        <strong>MILESTONES</strong>
+        <p>View the major goals you have reached during your career.</p>
+        <span class="legacy-option-arrow">OPEN →</span>
+      </button>
+
+      <button
+        class="legacy-option-card"
+        type="button"
+        data-legacy-page="records"
+      >
+        <span class="legacy-option-icon">📊</span>
+        <small>CAREER HISTORY</small>
+        <strong>CAREER RECORDS</strong>
+        <p>Review the biggest numbers and moments from your agency.</p>
+        <span class="legacy-option-arrow">OPEN →</span>
+      </button>
+    </div>
+  `;
+
+  content
+    .querySelector('[data-legacy-page="milestones"]')
+    .addEventListener("click", () => {
+      openLegacySection("milestones");
+    });
+
+  content
+    .querySelector('[data-legacy-page="records"]')
+    .addEventListener("click", () => {
+      openLegacySection("records");
+    });
+
+  overlay.classList.remove("hidden");
+  document.body.classList.add("legacy-open");
+}
+
+function getBallonDorCareerRecords() {
+  const recordsByPlayer = new Map();
+
+  ballonDorHistory.forEach((entry) => {
+    const key =
+      entry.playerId ||
+      `${entry.playerName || "Unknown"}-${entry.country || ""}`;
+
+    if (!recordsByPlayer.has(key)) {
+      const currentPlayer = signedPlayers.find(
+        (player) => player.id === entry.playerId,
+      );
+
+      recordsByPlayer.set(key, {
+        playerId: entry.playerId || key,
+        playerName: entry.playerName || "Unknown Player",
+        country: entry.country || currentPlayer?.country || "",
+        seasons: [],
+      });
+    }
+
+    const record = recordsByPlayer.get(key);
+
+    if (!record.country && entry.country) {
+      record.country = entry.country;
+    }
+
+    const season = Number(entry.season);
+
+    if (
+      Number.isFinite(season) &&
+      !record.seasons.includes(season)
+    ) {
+      record.seasons.push(season);
+    }
+  });
+
+  return [...recordsByPlayer.values()]
+    .map((record) => ({
+      ...record,
+      seasons: record.seasons.sort((a, b) => a - b),
+      wins: record.seasons.length,
+    }))
+    .sort(
+      (a, b) =>
+        b.wins - a.wins ||
+        (b.seasons.at(-1) || 0) - (a.seasons.at(-1) || 0),
+    );
+}
+
+const BALLON_DOR_RECORDS_PER_PAGE = 5;
+
+function renderCareerRecords(page = 1) {
+  const ballonDorRecords = getBallonDorCareerRecords();
+  const totalPages = Math.max(
+    1,
+    Math.ceil(ballonDorRecords.length / BALLON_DOR_RECORDS_PER_PAGE),
+  );
+  const safePage = Math.min(
+    Math.max(Number(page) || 1, 1),
+    totalPages,
+  );
+  const startIndex =
+    (safePage - 1) * BALLON_DOR_RECORDS_PER_PAGE;
+  const visibleRecords = ballonDorRecords.slice(
+    startIndex,
+    startIndex + BALLON_DOR_RECORDS_PER_PAGE,
+  );
+
+  const ballonDorMarkup =
+    ballonDorRecords.length > 0
+      ? visibleRecords
+          .map(
+            (record) => `
+              <div class="career-record-winner">
+                <span class="career-record-player">
+                  ${
+                    record.country
+                      ? getCountryFlag(record.country)
+                      : '<span class="career-record-flag-fallback">🌍</span>'
+                  }
+                  <strong>${record.playerName}</strong>
+                </span>
+
+                <span class="career-record-trophy">
+                  🏆 ${record.wins}
+                </span>
+              </div>
+            `,
+          )
+          .join("")
+      : `
+          <div class="career-record-empty">
+            No Ballon d'Or winners yet.
+          </div>
+        `;
+
+  const paginationMarkup =
+    ballonDorRecords.length > BALLON_DOR_RECORDS_PER_PAGE
+      ? `
+          <div class="career-record-pagination" aria-label="Ballon d'Or winner pages">
+            <button
+              class="career-record-page-button"
+              type="button"
+              data-record-page="${safePage - 1}"
+              aria-label="Previous page"
+              ${safePage === 1 ? "disabled" : ""}
+            >
+              ←
+            </button>
+
+            <strong class="career-record-page-number">
+              ${safePage}
+            </strong>
+
+            <button
+              class="career-record-page-button"
+              type="button"
+              data-record-page="${safePage + 1}"
+              aria-label="Next page"
+              ${safePage === totalPages ? "disabled" : ""}
+            >
+              →
+            </button>
+          </div>
+        `
+      : "";
+
+  const transferMarkup = recordTransfer
+    ? `
+        <div class="record-transfer-card record-transfer-card-simple">
+          <div class="record-transfer-player">
+            ${
+              recordTransfer.country
+                ? getCountryFlag(recordTransfer.country)
+                : '<span class="career-record-flag-fallback">🌍</span>'
+            }
+            <strong>${recordTransfer.playerName}</strong>
+          </div>
+
+          <strong class="record-transfer-fee">
+            ${formatMarketValue(recordTransfer.transferFee)}
+          </strong>
+        </div>
+      `
+    : `
+        <div class="career-record-empty">
+          No completed transfer has set a record yet.
+        </div>
+      `;
+
+  return `
+    <div class="career-records-page">
+      <section class="career-record-block">
+        <div class="career-record-heading">
+          <div>
+            <p class="legacy-eyebrow">AWARDS</p>
+            <h3>BALLON D'OR WINNERS</h3>
+          </div>
+          <span>${ballonDorRecords.length} PLAYER${ballonDorRecords.length === 1 ? "" : "S"}</span>
+        </div>
+
+        <div class="career-record-winner-list">
+          ${ballonDorMarkup}
+        </div>
+
+        ${paginationMarkup}
+      </section>
+
+      <section class="career-record-block">
+        <div class="career-record-heading">
+          <div>
+            <p class="legacy-eyebrow">TRANSFER HISTORY</p>
+            <h3>RECORD TRANSFER</h3>
+          </div>
+        </div>
+
+        ${transferMarkup}
+      </section>
+    </div>
+  `;
+}
+const milestoneTierClasses = [
+  "bronze",
+  "silver",
+  "gold",
+  "elite",
+  "legendary",
+  "platinum",
+];
+
+const milestoneGroups = [
+  {
+    key: "seasons",
+    label: "SEASONS",
+    icon: "◷",
+    thresholds: [50, 100, 250, 500, 750, 1000],
+    getValue: () => currentSeason,
+    format: (value) => value.toLocaleString(),
+  },
+  {
+    key: "reputation",
+    label: "REPUTATION",
+    icon: "★",
+    thresholds: [50, 100, 250, 500, 750, 1000],
+    getValue: () => Math.max(0, Math.floor(Number(agencyReputation) || 0)),
+    format: (value) => value.toLocaleString(),
+  },
+  {
+    key: "funds",
+    label: "FUNDS",
+    icon: "€",
+    thresholds: [
+      100_000_000,
+      250_000_000,
+      500_000_000,
+      1_000_000_000,
+      5_000_000_000,
+      10_000_000_000,
+    ],
+    getValue: () => agencyMoney,
+    format: (value) => formatMarketValue(value),
+  },
+];
+
+function renderMilestoneGroup(group) {
+  const currentValue = group.getValue();
+
+  const badges = group.thresholds
+    .map((threshold, index) => {
+      const unlocked = currentValue >= threshold;
+      const tierClass = milestoneTierClasses[index];
+
+      return `
+        <div class="milestone-badge-item ${unlocked ? "unlocked" : "locked"}">
+          <div class="milestone-medal ${tierClass}">
+            <span class="milestone-medal-icon milestone-icon-${group.key}">
+              ${unlocked ? group.icon : "🔒"}
+            </span>
+          </div>
+
+          <strong>${group.format(threshold)}</strong>
+
+          <span>
+            ${unlocked ? "COMPLETED" : "LOCKED"}
+          </span>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="milestone-block">
+      <div class="milestone-heading">
+        <div>
+          <p class="legacy-eyebrow">CAREER MILESTONE</p>
+          <h3>${group.label}</h3>
+        </div>
+
+        <strong>${group.format(currentValue)}</strong>
+      </div>
+
+      <div class="milestone-badge-grid">
+        ${badges}
+      </div>
+    </section>
+  `;
+}
+
+
+const HIDDEN_BADGE_PREVIEW = false;
+
+const hiddenBadgeDefinitions = [
+  {
+    key: "ballon10",
+    name: "DYNASTY",
+    description: "One player wins the Ballon d'Or 10 times.",
+    getProgress: () => {
+      const record = getBallonDorCareerRecords().find((entry) => entry.wins >= 10);
+      return record
+        ? { unlocked: true, icon: "🏆", detail: record.playerName }
+        : { unlocked: false };
+    },
+  },
+  {
+    key: "worldXI",
+    name: "GLOBAL",
+    description: "Manage 15 players with 15 different nationalities.",
+    getProgress: () => {
+      if (signedPlayers.length < 15) return { unlocked: false };
+      const countries = signedPlayers.slice(0, 15).map((player) => player.country).filter(Boolean);
+      return {
+        unlocked: countries.length === 15 && new Set(countries).size === 15,
+        icon: "🌐",
+        detail: "15 NATIONALITIES",
+      };
+    },
+  },
+  {
+    key: "oneNation",
+    name: "ONE NATION",
+    description: "Manage 15 players from the same nationality.",
+    getProgress: () => {
+      if (signedPlayers.length < 15) return { unlocked: false };
+      const countries = signedPlayers.slice(0, 15).map((player) => player.country).filter(Boolean);
+      const country = countries[0];
+      return {
+        unlocked: countries.length === 15 && countries.every((value) => value === country),
+        country,
+        detail: country || "",
+      };
+    },
+  },
+  {
+    key: "specialist",
+    name: "SPECIALIST",
+    description: "Manage 15 players in the same position.",
+    getProgress: () => {
+      if (signedPlayers.length < 15) return { unlocked: false };
+      const playerPositions = signedPlayers.slice(0, 15).map((player) => player.position).filter(Boolean);
+      const position = playerPositions[0];
+      return {
+        unlocked: playerPositions.length === 15 && playerPositions.every((value) => value === position),
+        icon: position || "POS",
+        detail: position || "",
+      };
+    },
+  },
+  {
+    key: "network",
+    name: "THE NETWORK",
+    description: "Manage 15 players from 15 different clubs.",
+    getProgress: () => {
+      if (signedPlayers.length < 15) return { unlocked: false };
+      const playerClubs = signedPlayers.slice(0, 15).map((player) => player.club).filter(Boolean);
+      return {
+        unlocked: playerClubs.length === 15 && new Set(playerClubs).size === 15,
+        icon: "🤝",
+        detail: "15 CLUBS",
+      };
+    },
+  },
+];
+
+function refreshHiddenBadges() {
+  let changed = false;
+
+  hiddenBadgeDefinitions.forEach((badge) => {
+    if (hiddenBadges[badge.key]?.unlocked) return;
+
+    const progress = badge.getProgress();
+    if (!progress.unlocked) return;
+
+    hiddenBadges[badge.key] = {
+      unlocked: true,
+      unlockedSeason: currentSeason,
+      icon: progress.icon || "",
+      country: progress.country || "",
+      detail: progress.detail || "",
+    };
+    changed = true;
+  });
+
+  if (changed) saveGameState();
+}
+
+function renderHiddenBadgeIcon(badge, savedBadge, preview = false) {
+  if (!savedBadge?.unlocked && !preview) return "?";
+
+  if (badge.key === "oneNation") {
+    const country = savedBadge?.country || signedPlayers[0]?.country;
+    return country ? getCountryFlag(country) : "⚑";
+  }
+
+  if (badge.key === "specialist") {
+    return savedBadge?.icon || signedPlayers[0]?.position || "CM";
+  }
+
+  return savedBadge?.icon || badge.getProgress().icon ||
+    (badge.key === "ballon10" ? "🏆" : badge.key === "worldXI" ? "🌐" : "🤝");
+}
+
+function renderHiddenBadges() {
+  refreshHiddenBadges();
+
+  const unlockedCount = hiddenBadgeDefinitions.filter(
+    (badge) => hiddenBadges[badge.key]?.unlocked,
+  ).length;
+
+  return `
+    <section class="milestone-block hidden-badge-block">
+      <div class="milestone-heading">
+        <div>
+          <p class="legacy-eyebrow">SECRET ACHIEVEMENTS</p>
+          <h3>HIDDEN BADGES</h3>
+        </div>
+        <strong>${unlockedCount} / ${hiddenBadgeDefinitions.length}</strong>
+      </div>
+
+      <div class="hidden-badge-grid">
+        ${hiddenBadgeDefinitions.map((badge) => {
+          const savedBadge = hiddenBadges[badge.key];
+          const preview = HIDDEN_BADGE_PREVIEW && !savedBadge?.unlocked;
+          const visible = Boolean(savedBadge?.unlocked || preview);
+          const icon = renderHiddenBadgeIcon(badge, savedBadge, preview);
+          const detail = savedBadge?.detail || (preview ? badge.getProgress().detail : "");
+
+          return `
+            <article class="hidden-badge-card ${visible ? "unlocked" : "locked"}">
+              <div class="hidden-badge-medal hidden-badge-${badge.key}">
+                <span class="hidden-badge-icon">${icon}</span>
+              </div>
+              <strong>${visible ? badge.name : "???"}</strong>
+              <span>${visible ? (detail || "UNLOCKED") : "LOCKED"}</span>
+              <p>${visible ? badge.description : "Complete a secret career objective to reveal this badge."}</p>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderMilestones() {
+  return `
+    <div class="milestones-page">
+      ${milestoneGroups.map(renderMilestoneGroup).join("")}
+
+      <section class="milestone-block milestone-ovr-preview">
+        <div class="milestone-heading">
+          <div>
+            <p class="legacy-eyebrow">ELITE COLLECTION</p>
+            <h3>99 OVR PLAYERS</h3>
+          </div>
+
+          <strong>
+            ${signedPlayers.filter((player) => player.overall === 99).length} / 15
+          </strong>
+        </div>
+
+        <div class="milestone-badge-grid milestone-badge-grid-four">
+          ${[
+            { count: 1, tier: "gold" },
+            { count: 5, tier: "elite" },
+            { count: 10, tier: "legendary" },
+            { count: 15, tier: "platinum" },
+          ]
+            .map(({ count, tier }) => {
+              const current99 = signedPlayers.filter(
+                (player) => player.overall === 99,
+              ).length;
+
+              const unlocked = current99 >= count;
+
+              return `
+                <div class="milestone-badge-item ${unlocked ? "unlocked" : "locked"}">
+                  <div class="milestone-medal ${tier}">
+                    <span class="milestone-medal-icon">
+                      ${unlocked ? "99" : "🔒"}
+                    </span>
+                  </div>
+
+                  <strong>${count} PLAYER${count === 1 ? "" : "S"}</strong>
+
+                  <span>
+                    ${
+                      unlocked
+                        ? count === 15
+                          ? "PERFECTION"
+                          : "COMPLETED"
+                        : "LOCKED"
+                    }
+                  </span>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      </section>
+
+      ${renderHiddenBadges()}
+    </div>
+  `;
+}
+
+
+const ovr99BadgeDefinitions = [
+  { count: 1, tier: "gold" },
+  { count: 5, tier: "elite" },
+  { count: 10, tier: "legendary" },
+  { count: 15, tier: "platinum" },
+];
+
+function getAllCurrentlyUnlockedBadgeKeys() {
+  const keys = [];
+
+  milestoneGroups.forEach((group) => {
+    const value = group.getValue();
+
+    group.thresholds.forEach((threshold) => {
+      if (value >= threshold) {
+        keys.push(`milestone:${group.key}:${threshold}`);
+      }
+    });
+  });
+
+  const current99 = signedPlayers.filter(
+    (player) => Number(player.overall) === 99,
+  ).length;
+
+  ovr99BadgeDefinitions.forEach(({ count }) => {
+    if (current99 >= count) {
+      keys.push(`ovr99:${count}`);
+    }
+  });
+
+  hiddenBadgeDefinitions.forEach((badge) => {
+    if (hiddenBadges[badge.key]?.unlocked) {
+      keys.push(`hidden:${badge.key}`);
+    }
+  });
+
+  return keys;
+}
+
+function getMilestoneUnlockPayload(group, threshold, index) {
+  return {
+    key: `milestone:${group.key}:${threshold}`,
+    type: "milestone",
+    eyebrow: "MILESTONE UNLOCKED",
+    title:
+      group.key === "seasons"
+        ? `${group.format(threshold)} SEASONS`
+        : group.key === "reputation"
+          ? `${group.format(threshold)} REPUTATION`
+          : `${group.format(threshold)} FUNDS`,
+    icon: group.icon,
+    tier: milestoneTierClasses[index],
+  };
+}
+
+function getOvr99UnlockPayload(count, tier) {
+  return {
+    key: `ovr99:${count}`,
+    type: "milestone",
+    eyebrow: "MILESTONE UNLOCKED",
+    title:
+      count === 15
+        ? "PERFECTION"
+        : `${count} 99 OVR PLAYER${count === 1 ? "" : "S"}`,
+    subtitle:
+      count === 15
+        ? "15 / 15 PLAYERS · 99 OVR"
+        : `${count} PLAYER${count === 1 ? "" : "S"}`,
+    icon: "99",
+    tier,
+  };
+}
+
+function getHiddenUnlockPayload(badge) {
+  const savedBadge = hiddenBadges[badge.key] || {};
+
+  let icon = savedBadge.icon || badge.getProgress().icon || "?";
+
+  if (badge.key === "oneNation") {
+    const country = savedBadge.country || signedPlayers[0]?.country;
+    icon = country ? getCountryFlag(country) : "⚑";
+  }
+
+  if (badge.key === "specialist") {
+    icon = savedBadge.icon || signedPlayers[0]?.position || "CM";
+  }
+
+  return {
+    key: `hidden:${badge.key}`,
+    type: "hidden",
+    eyebrow: "SECRET BADGE DISCOVERED",
+    title: badge.name,
+    subtitle: savedBadge.detail || badge.description,
+    icon,
+    tier: "hidden-tier",
+  };
+}
+
+function collectNewBadgeUnlocks() {
+  if (!badgeUnlockTrackingReady) {
+    getAllCurrentlyUnlockedBadgeKeys().forEach((key) => {
+      badgeUnlocksShown[key] = true;
+    });
+
+    badgeUnlockTrackingReady = true;
+    saveGameState();
+    return;
+  }
+
+  const newUnlocks = [];
+  let foundNewBadge = true;
+
+  while (foundNewBadge) {
+    foundNewBadge = false;
+
+    milestoneGroups.forEach((group) => {
+      const value = group.getValue();
+
+      group.thresholds.forEach((threshold, index) => {
+        if (value < threshold) return;
+
+        const payload = getMilestoneUnlockPayload(
+          group,
+          threshold,
+          index,
+        );
+
+        if (badgeUnlocksShown[payload.key]) return;
+
+        badgeUnlocksShown[payload.key] = true;
+        newUnlocks.push(payload);
+        agencyReputation += 10;
+        foundNewBadge = true;
+      });
+    });
+
+    const current99 = signedPlayers.filter(
+      (player) => Number(player.overall) === 99,
+    ).length;
+
+    ovr99BadgeDefinitions.forEach(({ count, tier }) => {
+      if (current99 < count) return;
+
+      const payload = getOvr99UnlockPayload(count, tier);
+
+      if (badgeUnlocksShown[payload.key]) return;
+
+      badgeUnlocksShown[payload.key] = true;
+      newUnlocks.push(payload);
+      agencyReputation += 10;
+      foundNewBadge = true;
+    });
+
+    hiddenBadgeDefinitions.forEach((badge) => {
+      if (!hiddenBadges[badge.key]?.unlocked) return;
+
+      const payload = getHiddenUnlockPayload(badge);
+
+      if (badgeUnlocksShown[payload.key]) return;
+
+      badgeUnlocksShown[payload.key] = true;
+      newUnlocks.push(payload);
+      agencyReputation += 10;
+      foundNewBadge = true;
+    });
+  }
+
+  if (newUnlocks.length === 0) return;
+
+  badgeUnlockQueue.push(...newUnlocks);
+
+  // Reputation changes immediately with the badge reward.
+  renderReputation();
+  saveGameState();
+  processBadgeUnlockQueue();
+}
+
+function closeBadgeUnlockReveal(overlay) {
+  if (!overlay) return;
+
+  overlay.classList.add("is-closing");
+
+  setTimeout(() => {
+    overlay.remove();
+    document.body.classList.remove("badge-unlock-open");
+    document.body.style.overflow = "";
+    badgeUnlockRevealActive = false;
+
+    if (badgeUnlockQueue.length > 0) {
+      setTimeout(processBadgeUnlockQueue, 160);
+    } else {
+      refreshGoatStatus();
+    }
+  }, 280);
+}
+
+function showBadgeUnlockReveal(unlock) {
+  badgeUnlockRevealActive = true;
+
+  const overlay = document.createElement("div");
+  overlay.className =
+    `badge-unlock-overlay badge-unlock-${unlock.type}`;
+
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute(
+    "aria-label",
+    `${unlock.eyebrow}: ${unlock.title}`,
+  );
+
+  const hiddenIntro =
+    unlock.type === "hidden"
+      ? `
+        <div class="badge-unlock-secret-shell">
+          <span>?</span>
+        </div>
+      `
+      : "";
+
+  overlay.innerHTML = `
+    <div class="badge-unlock-stage">
+      ${hiddenIntro}
+
+      <div class="badge-unlock-medal-wrap">
+        <div class="milestone-medal ${unlock.tier}">
+          <span class="milestone-medal-icon">
+            ${unlock.icon}
+          </span>
+        </div>
+      </div>
+
+      <div class="badge-unlock-copy">
+        <p class="badge-unlock-eyebrow">${unlock.eyebrow}</p>
+        <h2>${unlock.title}</h2>
+        ${
+          unlock.subtitle
+            ? `<p class="badge-unlock-subtitle">${unlock.subtitle}</p>`
+            : ""
+        }
+        <button class="badge-unlock-continue" type="button">
+          CONTINUE
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.classList.add("badge-unlock-open");
+  document.body.style.overflow = "hidden";
+
+  const continueButton =
+    overlay.querySelector(".badge-unlock-continue");
+
+  continueButton.addEventListener("click", () => {
+    closeBadgeUnlockReveal(overlay);
+  });
+
+  requestAnimationFrame(() => {
+    overlay.classList.add("is-visible");
+  });
+
+  if (unlock.type === "hidden") {
+    setTimeout(() => {
+      overlay.classList.add("is-revealed");
+    }, 620);
+  } else {
+    setTimeout(() => {
+      overlay.classList.add("is-revealed");
+    }, 180);
+  }
+
+  setTimeout(() => {
+    overlay.classList.add("is-finished");
+    continueButton.focus();
+  }, unlock.type === "hidden" ? 1250 : 850);
+}
+
+function processBadgeUnlockQueue() {
+  if (
+    badgeUnlockRevealActive ||
+    goatRevealActive ||
+    badgeUnlockQueue.length === 0
+  ) {
+    return;
+  }
+
+  const nextUnlock = badgeUnlockQueue.shift();
+  showBadgeUnlockReveal(nextUnlock);
+}
+
+
+function runBadgePreview() {
+  if (
+    !BADGE_PREVIEW ||
+    badgePreviewShownSession ||
+    badgeUnlockRevealActive ||
+    goatRevealActive
+  ) {
+    return;
+  }
+
+  badgePreviewShownSession = true;
+
+  // Preview only: does not change career progress or saved badge ownership.
+  badgeUnlockQueue.push(
+    {
+      key: "preview:season",
+      type: "milestone",
+      eyebrow: "MILESTONE UNLOCKED",
+      title: "50 SEASONS",
+      icon: "◷",
+      tier: "bronze",
+    },
+    {
+      key: "preview:reputation",
+      type: "milestone",
+      eyebrow: "MILESTONE UNLOCKED",
+      title: "250 REPUTATION",
+      icon: "★",
+      tier: "gold",
+    },
+    {
+      key: "preview:funds",
+      type: "milestone",
+      eyebrow: "MILESTONE UNLOCKED",
+      title: "€1B FUNDS",
+      icon: "€",
+      tier: "elite",
+    },
+    {
+      key: "preview:perfection",
+      type: "milestone",
+      eyebrow: "MILESTONE UNLOCKED",
+      title: "PERFECTION",
+      subtitle: "15 / 15 PLAYERS · 99 OVR",
+      icon: "99",
+      tier: "platinum",
+    },
+    {
+      key: "preview:hidden",
+      type: "hidden",
+      eyebrow: "SECRET BADGE DISCOVERED",
+      title: "GLOBAL",
+      subtitle: "Manage 15 players with 15 different nationalities.",
+      icon: "🌐",
+      tier: "hidden-tier",
+    },
+  );
+
+  setTimeout(processBadgeUnlockQueue, 120);
+}
+
+function refreshBadgeUnlocks() {
+  collectNewBadgeUnlocks();
+  runBadgePreview();
+}
+
+function hasGoatRequirements() {
+  const perfection =
+    signedPlayers.length === 15 &&
+    signedPlayers.every((player) => Number(player.overall) === 99);
+
+  return (
+    currentSeason >= 1000 &&
+    agencyReputation >= 1000 &&
+    agencyMoney >= 10_000_000_000 &&
+    perfection
+  );
+}
+
+function closeGoatReveal(overlay, preview = false) {
+  if (!overlay) return;
+
+  overlay.classList.add("is-closing");
+
+  setTimeout(() => {
+    overlay.remove();
+    document.body.classList.remove("goat-reveal-open");
+    document.body.style.overflow = "";
+    goatRevealActive = false;
+
+    if (!preview) {
+      goatRevealShown = true;
+      saveGameState();
+    }
+
+    updateGoatProfileDecoration();
+  }, 320);
+}
+
+function showGoatReveal(preview = false) {
+  if (goatRevealActive) return;
+
+  goatRevealActive = true;
+
+  const overlay = document.createElement("div");
+  overlay.className = "goat-reveal-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "Greatest of all time achievement");
+
+  overlay.innerHTML = `
+    <div class="goat-reveal-stage">
+      <div class="goat-final-badges" aria-hidden="true">
+        <div class="goat-final-badge goat-final-seasons">◷</div>
+        <div class="goat-final-badge goat-final-reputation">★</div>
+        <div class="goat-final-badge goat-final-funds">€</div>
+        <div class="goat-final-badge goat-final-perfection">99</div>
+      </div>
+
+      <div class="goat-crown-reveal" aria-hidden="true">♛</div>
+
+      <div class="goat-reveal-copy">
+        <p>YOU ARE THE GREATEST OF ALL TIME.</p>
+        <button class="goat-reveal-continue" type="button">
+          CONTINUE
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.classList.add("goat-reveal-open");
+  document.body.style.overflow = "hidden";
+
+  const continueButton =
+    overlay.querySelector(".goat-reveal-continue");
+
+  continueButton.addEventListener("click", () => {
+    closeGoatReveal(overlay, preview);
+  });
+
+  requestAnimationFrame(() => {
+    overlay.classList.add("is-visible");
+  });
+
+  setTimeout(() => {
+    overlay.classList.add("is-gathering");
+  }, 700);
+
+  setTimeout(() => {
+    overlay.classList.add("is-crowned");
+  }, 1900);
+
+  setTimeout(() => {
+    overlay.classList.add("is-finished");
+    continueButton.focus();
+  }, 2600);
+}
+
+function refreshGoatStatus() {
+  if (
+    badgeUnlockRevealActive ||
+    badgeUnlockQueue.length > 0
+  ) {
+    return;
+  }
+
+  if (GOAT_PREVIEW) {
+    updateGoatProfileDecoration();
+
+    if (!goatPreviewShownSession && !goatRevealActive) {
+      goatPreviewShownSession = true;
+      setTimeout(() => showGoatReveal(true), 80);
+    }
+
+    return;
+  }
+
+  if (!goatUnlocked && hasGoatRequirements()) {
+    goatUnlocked = true;
+    goatRevealShown = false;
+  }
+
+  updateGoatProfileDecoration();
+
+  if (
+    goatUnlocked &&
+    !goatRevealShown &&
+    !goatRevealActive
+  ) {
+    setTimeout(() => {
+      if (
+        goatUnlocked &&
+        !goatRevealShown &&
+        !goatRevealActive
+      ) {
+        showGoatReveal(false);
+      }
+    }, 120);
+  }
+}
+
+function bindCareerRecordInteractions(content) {
+  content
+    .querySelectorAll(".career-record-page-button")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextPage = Number(button.dataset.recordPage);
+
+        if (!Number.isFinite(nextPage)) {
+          return;
+        }
+
+        openLegacySection("records", nextPage);
+      });
+    });
+}
+
+function openLegacySection(sectionName, recordsPage = 1) {
+  const overlay = ensureLegacyOverlay();
+  const content = overlay.querySelector("#legacy-content");
+
+  const isMilestones = sectionName === "milestones";
+
+  content.innerHTML = `
+    <button
+      class="legacy-back"
+      type="button"
+    >
+      ← BACK TO LEGACY
+    </button>
+
+    ${
+      isMilestones
+        ? renderMilestones()
+        : renderCareerRecords(recordsPage)
+    }
+  `;
+
+  content
+    .querySelector(".legacy-back")
+    .addEventListener("click", openLegacyHub);
+
+  if (!isMilestones) {
+    bindCareerRecordInteractions(content);
+  }
+}
+
+function closeLegacyOverlay() {
+  const overlay = document.querySelector("#legacy-overlay");
+
+  if (!overlay) {
+    return;
+  }
+
+  overlay.classList.add("hidden");
+  document.body.classList.remove("legacy-open");
+}
+
   function showView(viewName) {
 
     scoutView.classList.add("hidden");
@@ -1416,6 +3324,7 @@ const emptyScoutButton =
         agencyTab.classList.add("active");
 
         renderSignedPlayers();
+        ensureLegacyInterface();
 
     }
 
@@ -2657,7 +4566,9 @@ function renderInbox() {
             ? "Transfer Offer"
             : message.type === "retirement"
               ? "Retirement"
-              : "Career Update";
+              : message.type === "agency-event"
+                ? "Agency Event"
+                : "Career Update";
 
       inboxMessageDetail.innerHTML = `
         <div class="inbox-detail-content">
@@ -2879,6 +4790,110 @@ function generateTransferOffers() {
   });
 }
 
+async function runNoOfferSeasonEvent() {
+  if (careerMode !== "endless") {
+    return null;
+  }
+
+  // These events are only a consolation for a genuinely quiet season.
+  // The agency must still represent at least 10 players, and there must
+  // be no transfer offers or expired-contract work waiting in the Inbox.
+  if (signedPlayers.length < 10) {
+    return null;
+  }
+
+  const hasPlayerBusiness = inboxMessages.some(
+    (message) =>
+      message.type === "transfer-offer" ||
+      message.type === "contract-expired",
+  );
+
+  if (hasPlayerBusiness) {
+    return null;
+  }
+
+  const roll = Math.random();
+
+  let event = null;
+
+  if (roll < 0.50) {
+    event = {
+      key: "holiday",
+      icon: "🏖️",
+      title: "Holiday",
+      reputationGain: 0,
+      cost: 0,
+      text:
+        "No offers arrived this season, so you took some time away from negotiations and recharged.",
+    };
+  } else if (roll < 0.80) {
+    const networkingCost = roundMoney(agencyMoney * 0.01);
+
+    agencyMoney = Math.max(0, agencyMoney - networkingCost);
+    agencyReputation += 25;
+
+    event = {
+      key: "networking",
+      icon: "🤝",
+      title: "Networking",
+      reputationGain: 25,
+      cost: networkingCost,
+      text:
+        `A quiet transfer season gave you time to build new relationships across football. ` +
+        `You spent ${formatMarketValue(networkingCost)} and gained 25 Reputation.`,
+    };
+  } else {
+    agencyReputation += 10;
+
+    event = {
+      key: "media-day",
+      icon: "🎙️",
+      title: "Media Day",
+      reputationGain: 10,
+      cost: 0,
+      text:
+        "With no offers to handle, you spent the day with the media and raised your agency profile. You gained 10 Reputation.",
+    };
+  }
+
+  addInboxMessage({
+    type: "agency-event",
+    title: `${event.icon} ${event.title}`,
+    text: event.text,
+  });
+
+  // Save immediately so refreshing while the popup is open cannot reroll
+  // the event or apply the reward twice.
+  saveGameState();
+
+  const stats = [
+  {
+    label: "REPUTATION",
+    value:
+      event.reputationGain > 0
+        ? `+${event.reputationGain} · Total ${agencyReputation}`
+        : `Total ${agencyReputation}`,
+  },
+];
+
+  if (event.cost > 0) {
+    stats.unshift({
+      label: "COST",
+      value: `-${formatMarketValue(event.cost)}`,
+    });
+  }
+
+  await showGameDialog({
+    eyebrow: `SEASON ${currentSeason} · QUIET SEASON`,
+    title: `${event.icon} ${event.title}`,
+    message: event.text,
+    stats,
+    confirmLabel: "CONTINUE",
+  });
+
+  return event;
+}
+
 function generateFreeAgentOffers(player) {
   const tier = getCurrentAgencyTier();
 
@@ -2911,8 +4926,13 @@ function generateFreeAgentOffers(player) {
       const contractYears =
         generateContractYearsForPlayer(player);
 
-      const signingCommission = roundMoney(
+      const transferFee = roundMoney(
         player.marketValue *
+          (randomInt(85, 120) / 100),
+      );
+
+      const signingCommission = roundMoney(
+        transferFee *
           (randomInt(10, 20) / 1000),
       );
 
@@ -2928,6 +4948,7 @@ function generateFreeAgentOffers(player) {
         clubName: club.name,
         clubCountry: club.country,
         clubLevel: club.level,
+        transferFee,
         contractYears,
         signingCommission,
         approvalChance,
@@ -3656,6 +5677,7 @@ async function acceptClubOffer(offerId) {
       selectedOffer,
     );
 
+
   player.club = selectedOffer.clubName;
   player.clubLevel = selectedOffer.clubLevel;
   player.contractYears = selectedOffer.contractYears;
@@ -3774,6 +5796,27 @@ async function acceptTransferOffer(messageId, offerId) {
       player,
       selectedOffer,
     );
+
+  if (
+    careerMode === "endless" &&
+    Number.isFinite(selectedOffer.transferFee) &&
+    selectedOffer.transferFee > 0 &&
+    (
+      !recordTransfer ||
+      selectedOffer.transferFee > recordTransfer.transferFee
+    )
+  ) {
+    recordTransfer = {
+      season: currentSeason,
+      playerId: player.id,
+      playerName: player.name,
+      country: player.country,
+      fromClub: previousClub,
+      toClub: selectedOffer.clubName,
+      transferFee: selectedOffer.transferFee,
+      recordType: "paid-transfer",
+    };
+  }
 
   player.club = selectedOffer.clubName;
   player.clubLevel = selectedOffer.clubLevel;
@@ -4066,13 +6109,18 @@ function updateSelectionUI() {
 
 function updateInterface() {
   nextSeasonButton.textContent =
-    currentSeason >= MAX_SEASONS
+    careerMode === "challenge" && currentSeason >= MAX_SEASONS
       ? "END SEASON"
       : "NEXT SEASON";
 
   updateAgencyDashboard();
   updateSelectionUI();
   updateInboxCounts();
+  renderReputation();
+  ensureLegacyInterface();
+  refreshHiddenBadges();
+  refreshBadgeUnlocks();
+  refreshGoatStatus();
   saveGameState();
 }
 
@@ -4938,8 +6986,11 @@ function recordBallonDorWinner(player) {
     season: currentSeason,
     playerId: player.id,
     playerName: player.name,
+    country: player.country,
   });
 
+  agencyReputation += 10;
+  renderReputation();
   saveGameState();
 }
 
@@ -5384,9 +7435,16 @@ function openCareerEnding() {
       }
 
       isResettingCareer = true;
-      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
-      localStorage.removeItem(AGENT_PROFILE_STORAGE_KEY);
-      window.location.reload();
+      localStorage.removeItem(CHALLENGE_GAME_STATE_STORAGE_KEY);
+      isResettingCareer = false;
+
+      resetRuntimeCareerState("challenge");
+      generateCandidates();
+      saveGameState();
+
+      overlay.remove();
+      document.body.style.overflow = "";
+      refreshCareerScreen();
     });
 }
 
@@ -5427,10 +7485,13 @@ async function advanceToNextSeason() {
 
   await runBallonDorBeforeSeasonAdvance();
 
-  if (currentSeason >= MAX_SEASONS) {
-    openCareerEnding();
-    return;
-  }
+  if (
+  careerMode === "challenge" &&
+  currentSeason >= MAX_SEASONS
+) {
+  openCareerEnding();
+  return;
+}
 
   const tier = getCurrentAgencyTier();
   const seasonSigningLimit = tier.maxSigningsPerSeason;
@@ -5443,7 +7504,7 @@ async function advanceToNextSeason() {
       seasonSigningLimit - signingsThisSeason;
 
     const confirmed = await showGameDialog({
-      eyebrow: "SEASON ${currentSeason}",
+      eyebrow: `SEASON ${currentSeason}`,
       title: "Advance to Next Season?",
       message: `You still have ${remaining} signing slot${
         remaining === 1 ? "" : "s"
@@ -5484,6 +7545,8 @@ async function advanceToNextSeason() {
   createContractExpiryMessages(seasonResults);
   generateTransferOffers();
 
+  await runNoOfferSeasonEvent();
+
   const managementIncome = calculateManagementIncome();
   agencyMoney += managementIncome;
 
@@ -5492,7 +7555,9 @@ async function advanceToNextSeason() {
   selectedIds.clear();
 
   seasonLabelElement.textContent =
-    `SEASON ${currentSeason} / ${MAX_SEASONS}`;
+    careerMode === "challenge"
+  ? `SEASON ${currentSeason} / ${MAX_SEASONS}`
+  : `SEASON ${currentSeason}`
 
   generateCandidates();
   renderSignedPlayers();
@@ -5599,21 +7664,24 @@ agencySortElement.addEventListener(
 ensureBallonDorStyles();
 populateNationalityOptions();
 loadAgentProfile();
+migrateLegacyCareerSave();
 
-const hasSavedGame = loadGameState();
+async function initializeCareerApp() {
+  if (!agentProfile) {
+    resetRuntimeCareerState("endless");
+    generateCandidates();
+    renderCandidates();
+    renderSignedPlayers();
+    updateInterface();
+    return;
+  }
 
-void registerAnalyticsSession();
-
-seasonLabelElement.textContent =
-    `SEASON ${currentSeason} / ${MAX_SEASONS}`;
-
-if (!hasSavedGame || candidates.length === 0) {
-  generateCandidates();
+  showMainMenu();
 }
 
-renderCandidates();
-renderSignedPlayers();
-updateInterface();
+void initializeCareerApp();
+
+void initializeCareerApp();
 
 window.addEventListener("beforeunload", saveGameState);
 document.addEventListener("visibilitychange", () => {

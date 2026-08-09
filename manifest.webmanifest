@@ -1,0 +1,11 @@
+{
+  "name": "Football Agent",
+  "short_name": "Football Agent",
+  "description": "Build your football agency, manage player careers and chase legendary milestones.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f1eb",
+  "theme_color": "#f3f1eb",
+  "orientation": "portrait-primary"
+}
