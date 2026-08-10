@@ -712,10 +712,36 @@ const clubs = [
 ];
 
 const AGENT_PROFILE_STORAGE_KEY = "footballAgentAppProfile";
-const ENDLESS_GAME_STATE_STORAGE_KEY = "footballAgentAppEndlessGameState";
-const CHALLENGE_GAME_STATE_STORAGE_KEY = "footballAgentAppChallengeGameState";
-const LEGACY_GAME_STATE_STORAGE_KEY = "footballAgentAppGameState";
-const ANALYTICS_USER_ID_KEY = "footballAgentAppAnalyticsUserId";
+
+const ENDLESS_GAME_STATE_STORAGE_KEY =
+  "footballAgentAppEndlessGameState";
+
+const CHALLENGE_GAME_STATE_STORAGE_KEY =
+  "footballAgentAppChallengeGameState";
+
+const ENDLESS_GAME_STATE_BACKUP_KEY =
+  "footballAgentAppEndlessGameStateBackup";
+
+const CHALLENGE_GAME_STATE_BACKUP_KEY =
+  "footballAgentAppChallengeGameStateBackup";
+
+const LEGACY_GAME_STATE_STORAGE_KEY =
+  "footballAgentAppGameState";
+
+const ANALYTICS_USER_ID_KEY =
+  "footballAgentAppAnalyticsUserId";
+
+function getGameStateStorageKey(mode = careerMode) {
+  return mode === "challenge"
+    ? CHALLENGE_GAME_STATE_STORAGE_KEY
+    : ENDLESS_GAME_STATE_STORAGE_KEY;
+}
+
+function getGameStateBackupKey(mode = careerMode) {
+  return mode === "challenge"
+    ? CHALLENGE_GAME_STATE_BACKUP_KEY
+    : ENDLESS_GAME_STATE_BACKUP_KEY;
+}
 
 function getGameStateStorageKey(mode = careerMode) {
   return mode === "challenge"
@@ -820,17 +846,15 @@ function getSavedCareerSummary(mode) {
 }
 
 function migrateLegacyCareerSave() {
-  if (
-    localStorage.getItem(ENDLESS_GAME_STATE_STORAGE_KEY) ||
-    localStorage.getItem(CHALLENGE_GAME_STATE_STORAGE_KEY)
-  ) {
-    return;
-  }
-
   try {
-    const legacyState = JSON.parse(
-      localStorage.getItem(LEGACY_GAME_STATE_STORAGE_KEY),
-    );
+    const legacyRaw =
+      localStorage.getItem(LEGACY_GAME_STATE_STORAGE_KEY);
+
+    if (!legacyRaw) {
+      return;
+    }
+
+    const legacyState = JSON.parse(legacyRaw);
 
     if (!legacyState || legacyState.version !== 1) {
       return;
@@ -841,17 +865,67 @@ function migrateLegacyCareerSave() {
         ? "challenge"
         : "endless";
 
-    localStorage.setItem(
-      getGameStateStorageKey(legacyMode),
-      JSON.stringify({
-        ...legacyState,
-        careerMode: legacyMode,
-      }),
-    );
+    const destinationKey =
+      getGameStateStorageKey(legacyMode);
 
-    localStorage.removeItem(LEGACY_GAME_STATE_STORAGE_KEY);
+    const currentSaveRaw =
+      localStorage.getItem(destinationKey);
+
+    // 해당 모드의 새 저장이 아예 없을 때
+    // 예전 저장을 새 저장 구조로 옮긴다.
+    if (!currentSaveRaw) {
+      localStorage.setItem(
+        destinationKey,
+        JSON.stringify({
+          ...legacyState,
+          careerMode: legacyMode,
+        }),
+      );
+
+      console.log(
+        `Legacy ${legacyMode} career migrated.`,
+      );
+
+      return;
+    }
+
+    // 새 저장도 있고 예전 저장도 있는 경우
+    // 시즌이 더 높은 쪽을 보존한다.
+    let currentSave = null;
+
+    try {
+      currentSave = JSON.parse(currentSaveRaw);
+    } catch (error) {
+      console.warn(
+        `Could not parse current ${legacyMode} save.`,
+        error,
+      );
+    }
+
+    const legacySeason =
+      Number(legacyState.currentSeason) || 1;
+
+    const currentSeason =
+      Number(currentSave?.currentSeason) || 1;
+
+    if (legacySeason > currentSeason) {
+      localStorage.setItem(
+        destinationKey,
+        JSON.stringify({
+          ...legacyState,
+          careerMode: legacyMode,
+        }),
+      );
+
+      console.log(
+        `Recovered older ${legacyMode} save: Season ${legacySeason}.`,
+      );
+    }
   } catch (error) {
-    console.warn("Could not migrate legacy career save.", error);
+    console.warn(
+      "Could not migrate legacy career save.",
+      error,
+    );
   }
 }
 
@@ -2401,10 +2475,20 @@ const BADGE_PREVIEW = false;
 let badgePreviewShownSession = false;
 
 function saveGameState({ skipCloudSync = false } = {}) {
-  if (isResettingCareer) {
+  if (isResettingCareer || !careerMode) {
     return;
   }
+
   try {
+    const storageKey =
+      getGameStateStorageKey();
+
+    const backupKey =
+      getGameStateBackupKey();
+
+    const previousRaw =
+      localStorage.getItem(storageKey);
+
     const gameState = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -2431,8 +2515,51 @@ function saveGameState({ skipCloudSync = false } = {}) {
       badgeUnlockTrackingReady,
     };
 
+    // 기존 정상 세이브를 먼저 백업
+    if (previousRaw) {
+      try {
+        const previousState =
+          JSON.parse(previousRaw);
+
+        const previousSeason =
+          Number(previousState?.currentSeason) || 1;
+
+        const newSeason =
+          Number(gameState.currentSeason) || 1;
+
+        /*
+         * 실수로 Season 1 상태가 높은 시즌 데이터를
+         * 덮으려는 상황에서는 기존 세이브를 백업한다.
+         */
+        if (
+          previousState?.version === 1 &&
+          previousSeason > newSeason
+        ) {
+          localStorage.setItem(
+            backupKey,
+            previousRaw,
+          );
+
+          console.warn(
+            `Career rollback detected. Season ${previousSeason} backed up before saving Season ${newSeason}.`,
+          );
+        } else {
+          // 정상적인 저장도 직전 상태를 백업으로 유지
+          localStorage.setItem(
+            backupKey,
+            previousRaw,
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "Could not create career backup.",
+          error,
+        );
+      }
+    }
+
     localStorage.setItem(
-      getGameStateStorageKey(),
+      storageKey,
       JSON.stringify(gameState),
     );
 
@@ -2440,7 +2567,10 @@ function saveGameState({ skipCloudSync = false } = {}) {
       queueCloudAutoSync();
     }
   } catch (error) {
-    console.warn("Could not save game progress.", error);
+    console.warn(
+      "Could not save game progress.",
+      error,
+    );
   }
 }
 
