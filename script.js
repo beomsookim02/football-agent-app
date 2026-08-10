@@ -3064,6 +3064,7 @@ function runBadgePreview() {
       eyebrow: "MILESTONE UNLOCKED",
       title: "50 SEASONS",
       icon: "◷",
+      iconClass: "seasons",
       tier: "bronze",
     },
     {
