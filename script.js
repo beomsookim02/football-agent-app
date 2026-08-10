@@ -723,6 +723,83 @@ function getGameStateStorageKey(mode = careerMode) {
     : ENDLESS_GAME_STATE_STORAGE_KEY;
 }
 
+const CLOUD_SAVE_SCHEMA_VERSION = 1;
+
+function readStoredJson(storageKey) {
+  try {
+    const value = localStorage.getItem(storageKey);
+    return value ? JSON.parse(value) : null;
+  } catch (error) {
+    console.warn(`Could not read stored data for ${storageKey}.`, error);
+    return null;
+  }
+}
+
+function createCloudSavePayload(flushCurrentCareer = true) {
+  // Manual backup can flush first. Automatic sync calls this with false
+  // because saveGameState() has already written the current state locally.
+  if (
+    flushCurrentCareer &&
+    careerMode &&
+    !isResettingCareer
+  ) {
+    saveGameState({ skipCloudSync: true });
+  }
+
+  return {
+    schemaVersion: CLOUD_SAVE_SCHEMA_VERSION,
+    savedAt: new Date().toISOString(),
+    agentProfile: readStoredJson(AGENT_PROFILE_STORAGE_KEY),
+    careers: {
+      endless: readStoredJson(ENDLESS_GAME_STATE_STORAGE_KEY),
+      challenge: readStoredJson(CHALLENGE_GAME_STATE_STORAGE_KEY),
+    },
+  };
+}
+
+function restoreCloudSavePayload(payload) {
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    payload.schemaVersion !== CLOUD_SAVE_SCHEMA_VERSION
+  ) {
+    throw new Error("Unsupported or invalid cloud save.");
+  }
+
+  const profile = payload.agentProfile;
+  const endlessSave = payload.careers?.endless;
+  const challengeSave = payload.careers?.challenge;
+
+  if (profile?.name && profile?.countryCode) {
+    localStorage.setItem(
+      AGENT_PROFILE_STORAGE_KEY,
+      JSON.stringify(profile),
+    );
+  }
+
+  if (endlessSave?.version === 1) {
+    localStorage.setItem(
+      ENDLESS_GAME_STATE_STORAGE_KEY,
+      JSON.stringify({
+        ...endlessSave,
+        careerMode: "endless",
+      }),
+    );
+  }
+
+  if (challengeSave?.version === 1) {
+    localStorage.setItem(
+      CHALLENGE_GAME_STATE_STORAGE_KEY,
+      JSON.stringify({
+        ...challengeSave,
+        careerMode: "challenge",
+      }),
+    );
+  }
+
+  return true;
+}
+
 function getSavedCareerSummary(mode) {
   try {
     const savedState = JSON.parse(
@@ -798,6 +875,564 @@ const supabaseClient = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY
 );
+
+const CLOUD_SAVE_TABLE = "cloud_saves";
+const CLOUD_LINKED_USER_KEY = "footballAgentCloudLinkedUserId";
+
+let cloudAutoSyncTimer = null;
+let cloudAutoSyncInFlight = false;
+let cloudAutoSyncPending = false;
+let cloudSyncReady = false;
+
+function getOAuthRedirectUrl() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+async function getCloudAuthUser() {
+  const {
+    data: { user },
+    error,
+  } = await supabaseClient.auth.getUser();
+
+  if (error) {
+    throw error;
+  }
+
+  return user || null;
+}
+
+async function signInWithGoogleForCloudSave() {
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: getOAuthRedirectUrl(),
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function signOutCloudSave() {
+  const { error } = await supabaseClient.auth.signOut({
+    scope: "local",
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  cloudSyncReady = false;
+  localStorage.removeItem(CLOUD_LINKED_USER_KEY);
+}
+
+async function uploadCloudSave() {
+  const user = await getCloudAuthUser();
+
+  if (!user) {
+    throw new Error("Please sign in with Google first.");
+  }
+
+  const payload = createCloudSavePayload(false);
+
+  // Safety check: the active career in the payload must match the
+  // season currently visible in the game before anything is uploaded.
+  if (careerMode === "endless") {
+    const payloadSeason = Number(
+      payload.careers?.endless?.currentSeason,
+    );
+
+    if (payloadSeason !== Number(currentSeason)) {
+      throw new Error(
+        `Backup safety check failed: Endless Career is Season ${currentSeason}, but the backup payload is Season ${payloadSeason || "?"}.`,
+      );
+    }
+  }
+
+  if (careerMode === "challenge") {
+    const payloadSeason = Number(
+      payload.careers?.challenge?.currentSeason,
+    );
+
+    if (payloadSeason !== Number(currentSeason)) {
+      throw new Error(
+        `Backup safety check failed: 30-Season Challenge is Season ${currentSeason}, but the backup payload is Season ${payloadSeason || "?"}.`,
+      );
+    }
+  }
+
+  const updatedAt = new Date().toISOString();
+
+  const { data, error } = await supabaseClient
+    .from(CLOUD_SAVE_TABLE)
+    .upsert(
+      {
+        user_id: user.id,
+        save_data: payload,
+        updated_at: updatedAt,
+      },
+      {
+        onConflict: "user_id",
+      },
+    )
+    .select("save_data, updated_at")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  if (careerMode === "endless") {
+    const storedSeason = Number(
+      data?.save_data?.careers?.endless?.currentSeason,
+    );
+
+    if (storedSeason !== Number(currentSeason)) {
+      throw new Error(
+        `Cloud verification failed: expected Endless Season ${currentSeason}, but Supabase returned Season ${storedSeason || "?"}.`,
+      );
+    }
+  }
+
+  if (careerMode === "challenge") {
+    const storedSeason = Number(
+      data?.save_data?.careers?.challenge?.currentSeason,
+    );
+
+    if (storedSeason !== Number(currentSeason)) {
+      throw new Error(
+        `Cloud verification failed: expected Challenge Season ${currentSeason}, but Supabase returned Season ${storedSeason || "?"}.`,
+      );
+    }
+  }
+
+  return {
+    payload: data?.save_data || payload,
+    updatedAt: data?.updated_at || updatedAt,
+  };
+}
+
+async function runCloudAutoSync() {
+  if (
+    isResettingCareer ||
+    !careerMode ||
+    !cloudSyncReady
+  ) {
+    return;
+  }
+
+  if (cloudAutoSyncInFlight) {
+    cloudAutoSyncPending = true;
+    return;
+  }
+
+  cloudAutoSyncInFlight = true;
+
+  try {
+    const user = await getCloudAuthUser();
+
+    if (!user) {
+      return;
+    }
+
+    await uploadCloudSave();
+  } catch (error) {
+    console.warn("Automatic cloud sync failed.", error);
+  } finally {
+    cloudAutoSyncInFlight = false;
+
+    if (cloudAutoSyncPending) {
+      cloudAutoSyncPending = false;
+      queueCloudAutoSync(800);
+    }
+  }
+}
+
+function queueCloudAutoSync(delay = 1200) {
+  if (
+    isResettingCareer ||
+    !careerMode ||
+    !cloudSyncReady
+  ) {
+    return;
+  }
+
+  if (cloudAutoSyncTimer) {
+    clearTimeout(cloudAutoSyncTimer);
+  }
+
+  cloudAutoSyncTimer = setTimeout(() => {
+    cloudAutoSyncTimer = null;
+    void runCloudAutoSync();
+  }, delay);
+}
+
+
+function chooseCareerSave(localSave, cloudSave) {
+  if (!localSave && !cloudSave) return null;
+  if (!localSave) return cloudSave;
+  if (!cloudSave) return localSave;
+
+  const localSeason = Number(localSave.currentSeason) || 1;
+  const cloudSeason = Number(cloudSave.currentSeason) || 1;
+
+  // Primary rule: preserve the career with more progress.
+  if (localSeason > cloudSeason) return localSave;
+  if (cloudSeason > localSeason) return cloudSave;
+
+  // Same season: use time only as a tie-breaker when both saves
+  // actually contain a reliable timestamp.
+  const localTime = new Date(localSave.savedAt || 0).getTime();
+  const cloudTime = new Date(cloudSave.savedAt || 0).getTime();
+
+  if (
+    Number.isFinite(localTime) &&
+    Number.isFinite(cloudTime) &&
+    localTime > 0 &&
+    cloudTime > 0
+  ) {
+    return cloudTime > localTime ? cloudSave : localSave;
+  }
+
+  // Old saves may not have savedAt. In a tie, keep this device's
+  // copy so signing in never unexpectedly rolls back local work.
+  return localSave;
+}
+
+async function initializeCloudSync() {
+  try {
+    const user = await getCloudAuthUser();
+
+    // No explicit Google sign-in = cloud does nothing.
+    if (!user) {
+      cloudSyncReady = false;
+      return;
+    }
+
+    const cloudRow = await downloadCloudSave();
+
+    const localProfile = readStoredJson(AGENT_PROFILE_STORAGE_KEY);
+    const localEndless = readStoredJson(
+      ENDLESS_GAME_STATE_STORAGE_KEY,
+    );
+    const localChallenge = readStoredJson(
+      CHALLENGE_GAME_STATE_STORAGE_KEY,
+    );
+
+    // First time this Google account has no cloud save:
+    // upload whatever progress currently exists on this device.
+    if (!cloudRow?.save_data) {
+      localStorage.setItem(CLOUD_LINKED_USER_KEY, user.id);
+      cloudSyncReady = true;
+
+      await uploadCloudSave();
+      return;
+    }
+
+    const cloudProfile =
+      cloudRow.save_data?.agentProfile || null;
+    const cloudEndless =
+      cloudRow.save_data?.careers?.endless || null;
+    const cloudChallenge =
+      cloudRow.save_data?.careers?.challenge || null;
+
+    // Endless and Challenge are compared independently.
+    const bestEndless = chooseCareerSave(
+      localEndless,
+      cloudEndless,
+    );
+    const bestChallenge = chooseCareerSave(
+      localChallenge,
+      cloudChallenge,
+    );
+
+    if (bestEndless) {
+      localStorage.setItem(
+        ENDLESS_GAME_STATE_STORAGE_KEY,
+        JSON.stringify({
+          ...bestEndless,
+          careerMode: "endless",
+        }),
+      );
+    }
+
+    if (bestChallenge) {
+      localStorage.setItem(
+        CHALLENGE_GAME_STATE_STORAGE_KEY,
+        JSON.stringify({
+          ...bestChallenge,
+          careerMode: "challenge",
+        }),
+      );
+    }
+
+    // On a genuinely new/reinstalled device there is no local profile,
+    // so restore the profile from the connected account.
+    if (!localProfile && cloudProfile) {
+      localStorage.setItem(
+        AGENT_PROFILE_STORAGE_KEY,
+        JSON.stringify(cloudProfile),
+      );
+    }
+
+    localStorage.setItem(CLOUD_LINKED_USER_KEY, user.id);
+    cloudSyncReady = true;
+
+    // Push the merged "furthest progress" result back to cloud.
+    // careerMode is still null during startup, so uploadCloudSave()
+    // safely uploads both stored careers without active-view checks.
+    await uploadCloudSave();
+  } catch (error) {
+    cloudSyncReady = false;
+    console.warn("Cloud sync initialization failed.", error);
+  }
+}
+
+async function downloadCloudSave() {
+  const user = await getCloudAuthUser();
+
+  if (!user) {
+    throw new Error("Please sign in with Google first.");
+  }
+
+  const { data, error } = await supabaseClient
+    .from(CLOUD_SAVE_TABLE)
+    .select("save_data, updated_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data || null;
+}
+
+function formatCloudSaveTime(value) {
+  if (!value) return "No cloud backup yet";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Cloud backup available";
+  }
+
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const timeText = date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (isToday) {
+    return `Today · ${timeText}`;
+  }
+
+  const dateText = date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  });
+
+  return `${dateText} · ${timeText}`;
+}
+
+function showCloudSaveDialog() {
+  return new Promise(async (resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "game-dialog-overlay";
+
+    const modal = document.createElement("div");
+    modal.className = "game-dialog-modal";
+    modal.style.maxWidth = "520px";
+
+    let user = null;
+    let cloudRow = null;
+    let loadError = null;
+
+    try {
+      user = await getCloudAuthUser();
+
+      if (user) {
+        cloudRow = await downloadCloudSave();
+      }
+    } catch (error) {
+      loadError = error;
+      console.warn("Could not load cloud save status.", error);
+    }
+
+    const email =
+      user?.email ||
+      user?.user_metadata?.email ||
+      "Google account connected";
+
+    modal.innerHTML = `
+      <p class="game-dialog-eyebrow">CLOUD SAVE</p>
+      <h2 class="game-dialog-title">
+        ${user ? "Cloud Sync" : "Protect Your Career"}
+      </h2>
+
+      <p class="game-dialog-message">
+        ${
+          user
+            ? `Signed in as <strong>${email}</strong>. Your career saves automatically on this device and in the cloud while this account is connected. Sign in with the same account on another device to continue.`
+            : "Your career is currently stored only on this device. Connect Google to sync your progress and continue on another device."
+        }
+      </p>
+
+      ${
+        loadError
+          ? `<p class="game-dialog-message" style="color:#b45309;">Cloud status could not be loaded. You can close this window and try again.</p>`
+          : ""
+      }
+
+      ${
+        user
+          ? `
+            <div class="game-dialog-stats">
+              <div class="game-dialog-stat">
+                <span>LAST CLOUD SAVE</span>
+                <strong>${formatCloudSaveTime(cloudRow?.updated_at)}</strong>
+                <small style="display:block; margin-top:6px; opacity:.62; font-weight:800; letter-spacing:.08em;">
+                  AUTO SYNC ON
+                </small>
+              </div>
+            </div>
+
+            <div class="game-dialog-actions" style="flex-wrap:wrap;">
+              <button
+                class="game-dialog-button"
+                type="button"
+                data-cloud-action="signout"
+              >
+                SIGN OUT
+              </button>
+
+              <button
+                class="game-dialog-button game-dialog-confirm"
+                type="button"
+                data-cloud-action="close"
+              >
+                CLOSE
+              </button>
+            </div>
+          `
+          : `
+            <div class="game-dialog-actions">
+              <button
+                class="game-dialog-button game-dialog-confirm"
+                type="button"
+                data-cloud-action="google"
+              >
+                CONTINUE WITH GOOGLE
+              </button>
+
+              <button
+                class="game-dialog-button game-dialog-cancel"
+                type="button"
+                data-cloud-action="close"
+              >
+                NOT NOW
+              </button>
+            </div>
+          `
+      }
+    `;
+
+    const close = () => {
+      overlay.remove();
+      document.body.style.overflow = "";
+      resolve(true);
+    };
+
+    const setBusy = (busy) => {
+      modal.querySelectorAll("button").forEach((button) => {
+        button.disabled = busy;
+      });
+    };
+
+    modal.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-cloud-action]");
+
+      if (!button) return;
+
+      const action = button.dataset.cloudAction;
+
+      if (action === "close") {
+        close();
+        return;
+      }
+
+      if (action === "google") {
+        setBusy(true);
+
+        try {
+          await signInWithGoogleForCloudSave();
+        } catch (error) {
+          console.error("Google sign-in failed.", error);
+          setBusy(false);
+
+          await showGameDialog({
+            eyebrow: "CLOUD SAVE",
+            title: "Google Sign-In Failed",
+            message:
+              error?.message ||
+              "Could not start Google sign-in. Please try again.",
+            confirmLabel: "CLOSE",
+            tone: "warning",
+          });
+        }
+
+        return;
+      }
+
+      if (action === "signout") {
+        setBusy(true);
+
+        try {
+          await signOutCloudSave();
+          close();
+
+          await showGameDialog({
+            eyebrow: "CLOUD SAVE",
+            title: "Signed Out",
+            message:
+              "Your local career is still saved on this device. Cloud backup is disconnected until you sign in again.",
+            confirmLabel: "DONE",
+            tone: "default",
+          });
+        } catch (error) {
+          console.error("Cloud sign-out failed.", error);
+          setBusy(false);
+
+          await showGameDialog({
+            eyebrow: "CLOUD SAVE",
+            title: "Sign-Out Failed",
+            message:
+              error?.message ||
+              "Could not sign out of the cloud account.",
+            confirmLabel: "CLOSE",
+            tone: "warning",
+          });
+        }
+      }
+    });
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        close();
+      }
+    });
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+  });
+}
 async function registerAnalyticsSession() {
   try {
     const { error } = await supabaseClient.rpc("register_player_session", {
@@ -1313,6 +1948,21 @@ function showCareerModeDialog() {
           </small>
         </button>
       </div>
+
+      ${
+        careerMode
+          ? `
+            <button
+              id="career-menu-cloud-save"
+              class="game-dialog-button"
+              type="button"
+              style="width:100%; margin-top:16px;"
+            >
+              CLOUD SAVE
+            </button>
+          `
+          : ""
+      }
     `;
 
     overlay.appendChild(modal);
@@ -1331,6 +1981,19 @@ function showCareerModeDialog() {
           resolve(selectedMode);
         });
       });
+
+    const cloudSaveButton =
+      modal.querySelector("#career-menu-cloud-save");
+
+    if (cloudSaveButton) {
+      cloudSaveButton.addEventListener("click", async () => {
+        await showCloudSaveDialog();
+
+        if (document.body.contains(overlay)) {
+          document.body.style.overflow = "hidden";
+        }
+      });
+    }
   });
 }
 
@@ -1351,6 +2014,7 @@ function resetRuntimeCareerState(mode) {
   ballonDorHistory = [];
   recordTransfer = null;
   hiddenBadges = {};
+  ovr99Milestones = {};
   goatUnlocked = false;
   goatRevealShown = false;
   goatRevealActive = false;
@@ -1608,14 +2272,7 @@ function ensureMainMenu() {
   menu
     .querySelector("#main-menu-settings")
     .addEventListener("click", () => {
-      void showGameDialog({
-        eyebrow: "SETTINGS",
-        title: "Settings",
-        message:
-          "More app settings can be added here later. Your career saves are stored automatically on this device.",
-        confirmLabel: "CLOSE",
-        tone: "default",
-      });
+      void showCloudSaveDialog();
     });
 
   return menu;
@@ -1729,6 +2386,7 @@ let isResettingCareer = false;
 let ballonDorHistory = [];
 let recordTransfer = null;
 let hiddenBadges = {};
+let ovr99Milestones = {};
 let goatUnlocked = false;
 let goatRevealShown = false;
 let goatRevealActive = false;
@@ -1742,13 +2400,14 @@ const GOAT_PREVIEW = false;
 const BADGE_PREVIEW = false;
 let badgePreviewShownSession = false;
 
-function saveGameState() {
+function saveGameState({ skipCloudSync = false } = {}) {
   if (isResettingCareer) {
     return;
   }
   try {
     const gameState = {
       version: 1,
+      savedAt: new Date().toISOString(),
       careerMode,
       currentSeason,
       currentAgencyTierIndex,
@@ -1765,6 +2424,7 @@ function saveGameState() {
       ballonDorHistory,
       recordTransfer,
       hiddenBadges,
+      ovr99Milestones,
       goatUnlocked,
       goatRevealShown,
       badgeUnlocksShown,
@@ -1775,6 +2435,10 @@ function saveGameState() {
       getGameStateStorageKey(),
       JSON.stringify(gameState),
     );
+
+    if (!skipCloudSync) {
+      queueCloudAutoSync();
+    }
   } catch (error) {
     console.warn("Could not save game progress.", error);
   }
@@ -1873,6 +2537,28 @@ currentAgencyTierIndex = Math.max(
       savedState.hiddenBadges && typeof savedState.hiddenBadges === "object"
         ? savedState.hiddenBadges
         : {};
+
+    ovr99Milestones =
+      savedState.ovr99Milestones &&
+      typeof savedState.ovr99Milestones === "object"
+        ? savedState.ovr99Milestones
+        : {};
+
+    // Backward-compatible migration for careers created before
+    // permanent 99 OVR milestone ownership was stored separately.
+    const loadedCurrent99 = signedPlayers.filter(
+      (player) => Number(player.overall) === 99,
+    ).length;
+
+    [1, 5, 10, 15].forEach((count) => {
+      if (
+        savedState.badgeUnlocksShown?.[`ovr99:${count}`] ||
+        loadedCurrent99 >= count
+      ) {
+        ovr99Milestones[count] = true;
+      }
+    });
+
     goatUnlocked = Boolean(savedState.goatUnlocked);
     goatRevealShown = Boolean(savedState.goatRevealShown);
     badgeUnlocksShown =
@@ -2712,7 +3398,9 @@ function renderMilestones() {
                 (player) => player.overall === 99,
               ).length;
 
-              const unlocked = current99 >= count;
+              const unlocked =
+                Boolean(ovr99Milestones[count]) ||
+                current99 >= count;
 
               return `
                 <div class="milestone-badge-item ${unlocked ? "unlocked" : "locked"}">
@@ -2771,7 +3459,7 @@ function getAllCurrentlyUnlockedBadgeKeys() {
   ).length;
 
   ovr99BadgeDefinitions.forEach(({ count }) => {
-    if (current99 >= count) {
+    if (ovr99Milestones[count] || current99 >= count) {
       keys.push(`ovr99:${count}`);
     }
   });
@@ -2851,6 +3539,16 @@ function getHiddenUnlockPayload(badge) {
 
 function collectNewBadgeUnlocks() {
   if (!badgeUnlockTrackingReady) {
+    const current99 = signedPlayers.filter(
+      (player) => Number(player.overall) === 99,
+    ).length;
+
+    ovr99BadgeDefinitions.forEach(({ count }) => {
+      if (current99 >= count) {
+        ovr99Milestones[count] = true;
+      }
+    });
+
     getAllCurrentlyUnlockedBadgeKeys().forEach((key) => {
       badgeUnlocksShown[key] = true;
     });
@@ -2893,6 +3591,10 @@ function collectNewBadgeUnlocks() {
 
     ovr99BadgeDefinitions.forEach(({ count, tier }) => {
       if (current99 < count) return;
+
+      if (!ovr99Milestones[count]) {
+        ovr99Milestones[count] = true;
+      }
 
       const payload = getOvr99UnlockPayload(count, tier);
 
@@ -7452,7 +8154,7 @@ function openCareerEnding() {
         eyebrow: "NEW CAREER",
         title: "Begin a New Journey?",
         message:
-          "Your completed career, game progress and agent profile will be permanently deleted.",
+          "Your completed 30-Season Challenge progress will be permanently deleted. Your agent profile and Endless Career will not be affected.",
         confirmLabel: "START NEW CAREER",
         cancelLabel: "VIEW CAREER",
         tone: "danger",
@@ -7691,10 +8393,15 @@ agencySortElement.addEventListener(
 );
 ensureBallonDorStyles();
 populateNationalityOptions();
-loadAgentProfile();
 migrateLegacyCareerSave();
 
 async function initializeCareerApp() {
+  // If the user previously chose Google sign-in, merge cloud progress
+  // before reading the profile or rendering career summaries.
+  await initializeCloudSync();
+
+  loadAgentProfile();
+
   if (!agentProfile) {
     resetRuntimeCareerState("endless");
     generateCandidates();
@@ -7709,9 +8416,11 @@ async function initializeCareerApp() {
 
 void initializeCareerApp();
 
-void initializeCareerApp();
-
-window.addEventListener("beforeunload", saveGameState);
+window.addEventListener("beforeunload", () => {
+  if (careerMode && !isResettingCareer) {
+    saveGameState();
+  }
+});
 document.addEventListener("visibilitychange", () => {
   if (
     document.visibilityState === "hidden" &&
