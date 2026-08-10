@@ -2797,6 +2797,7 @@ function getMilestoneUnlockPayload(group, threshold, index) {
           ? `${group.format(threshold)} REPUTATION`
           : `${group.format(threshold)} FUNDS`,
     icon: group.icon,
+    iconClass: group.key,
     tier: milestoneTierClasses[index],
   };
 }
@@ -2809,11 +2810,15 @@ function getOvr99UnlockPayload(count, tier) {
     title:
       count === 15
         ? "PERFECTION"
-        : `${count} 99 OVR PLAYER${count === 1 ? "" : "S"}`,
+        : count === 1
+          ? "99 OVR PLAYER"
+          : `${count} 99 OVR PLAYERS`,
     subtitle:
       count === 15
         ? "15 / 15 PLAYERS · 99 OVR"
-        : `${count} PLAYER${count === 1 ? "" : "S"}`,
+        : count === 1
+          ? ""
+          : `${count} PLAYERS`,
     icon: "99",
     tier,
   };
@@ -2971,7 +2976,9 @@ function showBadgeUnlockReveal(unlock) {
 
       <div class="badge-unlock-medal-wrap">
         <div class="milestone-medal ${unlock.tier}">
-          <span class="milestone-medal-icon">
+          <span class="milestone-medal-icon${
+            unlock.iconClass ? ` milestone-icon-${unlock.iconClass}` : ""
+          }">
             ${unlock.icon}
           </span>
         </div>
@@ -4048,6 +4055,26 @@ function createPlayerCard(
   return row;
 }
 
+function renderBallonDorTrophies(wins) {
+  const totalWins = Math.max(0, Number(wins) || 0);
+
+  if (totalWins === 0) {
+    return "";
+  }
+
+  const lines = [];
+
+  for (let index = 0; index < totalWins; index += 8) {
+    const lineWins = Math.min(8, totalWins - index);
+
+    lines.push(
+      `<span class="ballon-dor-trophy-line">${"🏆".repeat(lineWins)}</span>`,
+    );
+  }
+
+  return lines.join("");
+}
+
 function createSignedPlayerRow(player) {
   const row = document.createElement("div");
 
@@ -4088,7 +4115,7 @@ function createSignedPlayerRow(player) {
         class="row-ballon-dor"
         title="Ballon d'Or wins: ${Number(player.ballonDorWins) || 0}"
       >
-        ${"🏆".repeat(Number(player.ballonDorWins) || 0)}
+        ${renderBallonDorTrophies(player.ballonDorWins)}
       </span>
 
       <span

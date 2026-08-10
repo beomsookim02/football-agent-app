@@ -6914,3 +6914,49 @@ body.badge-unlock-open {
     width: calc(100% + 12px) !important;
   }
 }
+
+/* =========================================================
+   2026-08-10 UI POLISH
+   - Ballon d'Or: show every trophy, max 8 per visual line
+   - Seasons badge: stronger / darker clock symbol
+   ========================================================= */
+
+@media (min-width: 681px) {
+  #agency-view .agency-player-row .row-ballon-dor {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    white-space: normal !important;
+    line-height: 1 !important;
+  }
+
+  #agency-view .agency-player-row .ballon-dor-trophy-line {
+    display: block;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1;
+  }
+}
+
+/* Keep the season clock visually as strong as the star / euro symbols. */
+.milestone-badge-item.unlocked .milestone-icon-seasons,
+.badge-unlock-medal-wrap .milestone-icon-seasons {
+  color: #6f4727;
+  font-size: 24px;
+  font-weight: 1000;
+  filter: contrast(1.45);
+  text-shadow:
+    0.45px 0 currentColor,
+    -0.45px 0 currentColor,
+    0 0.45px currentColor,
+    0 -0.45px currentColor;
+}
+
+@media (max-width: 680px) {
+  .milestone-badge-item.unlocked .milestone-icon-seasons,
+  .badge-unlock-medal-wrap .milestone-icon-seasons {
+    font-size: 20px;
+  }
+}
