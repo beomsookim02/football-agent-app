@@ -731,6 +731,9 @@ const LEGACY_GAME_STATE_STORAGE_KEY =
 const ANALYTICS_USER_ID_KEY =
   "footballAgentAppAnalyticsUserId";
 
+const CLOUD_INTENTIONAL_RESET_KEY =
+  "footballAgentCloudIntentionalReset";
+
 function getGameStateStorageKey(mode = careerMode) {
   return mode === "challenge"
     ? CHALLENGE_GAME_STATE_STORAGE_KEY
@@ -741,12 +744,6 @@ function getGameStateBackupKey(mode = careerMode) {
   return mode === "challenge"
     ? CHALLENGE_GAME_STATE_BACKUP_KEY
     : ENDLESS_GAME_STATE_BACKUP_KEY;
-}
-
-function getGameStateStorageKey(mode = careerMode) {
-  return mode === "challenge"
-    ? CHALLENGE_GAME_STATE_STORAGE_KEY
-    : ENDLESS_GAME_STATE_STORAGE_KEY;
 }
 
 const CLOUD_SAVE_SCHEMA_VERSION = 1;
@@ -1009,10 +1006,65 @@ async function uploadCloudSave() {
   }
 
   const payload = createCloudSavePayload(false);
+  const intentionalResetMode =
+    localStorage.getItem(CLOUD_INTENTIONAL_RESET_KEY);
 
-  // Safety check: the active career in the payload must match the
-  // season currently visible in the game before anything is uploaded.
-  if (careerMode === "endless") {
+  // Read the current cloud copy before overwriting it.
+  // If local progress suddenly moves backwards without an intentional reset,
+  // preserve the higher cloud career instead of uploading the rollback.
+  const {
+    data: existingCloudRow,
+    error: existingCloudError,
+  } = await supabaseClient
+    .from(CLOUD_SAVE_TABLE)
+    .select("save_data")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existingCloudError) {
+    throw existingCloudError;
+  }
+
+  const existingCloudSave =
+    existingCloudRow?.save_data || null;
+
+  const rollbackBlockedModes = new Set();
+
+  if (existingCloudSave) {
+    for (const mode of ["endless", "challenge"]) {
+      const localCareer = payload.careers?.[mode];
+      const cloudCareer =
+        existingCloudSave.careers?.[mode];
+
+      if (!localCareer || !cloudCareer) {
+        continue;
+      }
+
+      const localSeason =
+        Number(localCareer.currentSeason) || 1;
+      const cloudSeason =
+        Number(cloudCareer.currentSeason) || 1;
+
+      if (
+        localSeason < cloudSeason &&
+        intentionalResetMode !== mode
+      ) {
+        console.warn(
+          `Cloud rollback blocked for ${mode}: local Season ${localSeason}, cloud Season ${cloudSeason}.`,
+        );
+
+        payload.careers[mode] = cloudCareer;
+        rollbackBlockedModes.add(mode);
+      }
+    }
+  }
+
+  // Safety check: when the active career is not being rollback-protected,
+  // the payload must match the season currently visible in the game.
+  if (
+    careerMode === "endless" &&
+    !rollbackBlockedModes.has("endless")
+  ) {
     const payloadSeason = Number(
       payload.careers?.endless?.currentSeason,
     );
@@ -1024,7 +1076,10 @@ async function uploadCloudSave() {
     }
   }
 
-  if (careerMode === "challenge") {
+  if (
+    careerMode === "challenge" &&
+    !rollbackBlockedModes.has("challenge")
+  ) {
     const payloadSeason = Number(
       payload.careers?.challenge?.currentSeason,
     );
@@ -1057,7 +1112,10 @@ async function uploadCloudSave() {
     throw error;
   }
 
-  if (careerMode === "endless") {
+  if (
+    careerMode === "endless" &&
+    !rollbackBlockedModes.has("endless")
+  ) {
     const storedSeason = Number(
       data?.save_data?.careers?.endless?.currentSeason,
     );
@@ -1069,7 +1127,10 @@ async function uploadCloudSave() {
     }
   }
 
-  if (careerMode === "challenge") {
+  if (
+    careerMode === "challenge" &&
+    !rollbackBlockedModes.has("challenge")
+  ) {
     const storedSeason = Number(
       data?.save_data?.careers?.challenge?.currentSeason,
     );
@@ -1079,6 +1140,15 @@ async function uploadCloudSave() {
         `Cloud verification failed: expected Challenge Season ${currentSeason}, but Supabase returned Season ${storedSeason || "?"}.`,
       );
     }
+  }
+
+  // An intentional reset is considered complete only after the lower
+  // Season 1 save has successfully reached the cloud.
+  if (
+    intentionalResetMode &&
+    !rollbackBlockedModes.has(intentionalResetMode)
+  ) {
+    localStorage.removeItem(CLOUD_INTENTIONAL_RESET_KEY);
   }
 
   return {
@@ -1212,14 +1282,26 @@ async function initializeCloudSync() {
       cloudRow.save_data?.careers?.challenge || null;
 
     // Endless and Challenge are compared independently.
-    const bestEndless = chooseCareerSave(
-      localEndless,
-      cloudEndless,
-    );
-    const bestChallenge = chooseCareerSave(
-      localChallenge,
-      cloudChallenge,
-    );
+    // A confirmed reset is the one exception: keep the local Season 1 copy
+    // long enough to sync that deliberate reset to the cloud.
+    const intentionalResetMode =
+      localStorage.getItem(CLOUD_INTENTIONAL_RESET_KEY);
+
+    const bestEndless =
+      intentionalResetMode === "endless" && localEndless
+        ? localEndless
+        : chooseCareerSave(
+            localEndless,
+            cloudEndless,
+          );
+
+    const bestChallenge =
+      intentionalResetMode === "challenge" && localChallenge
+        ? localChallenge
+        : chooseCareerSave(
+            localChallenge,
+            cloudChallenge,
+          );
 
     if (bestEndless) {
       localStorage.setItem(
@@ -2433,9 +2515,21 @@ tryAgainButton.addEventListener("click", async () => {
   }
 
   isResettingCareer = true;
-  localStorage.removeItem(getGameStateStorageKey());
 
-  resetRuntimeCareerState(careerMode);
+  const resettingMode = careerMode;
+
+  // This path runs only after the user confirms Try Again.
+  // Endless additionally requires typing FOOTBALL.
+  localStorage.setItem(
+    CLOUD_INTENTIONAL_RESET_KEY,
+    resettingMode,
+  );
+
+  localStorage.removeItem(
+    getGameStateStorageKey(resettingMode),
+  );
+
+  resetRuntimeCareerState(resettingMode);
   generateCandidates();
 
   isResettingCareer = false;
