@@ -955,6 +955,20 @@ let cloudAutoSyncInFlight = false;
 let cloudAutoSyncPending = false;
 let cloudSyncReady = false;
 
+// Optimistic concurrency guard for multi-device cloud saves.
+// This stores the exact cloud version (updated_at) that this device last saw.
+// If another device changes the cloud row after that point, this device will
+// refuse to overwrite it and will ask the player to load the newer cloud save.
+let cloudLastKnownUpdatedAt = null;
+let cloudConflictHandling = false;
+
+class CloudSaveConflictError extends Error {
+  constructor(message = "Cloud save changed on another device.") {
+    super(message);
+    this.name = "CloudSaveConflictError";
+  }
+}
+
 function getOAuthRedirectUrl() {
   return `${window.location.origin}${window.location.pathname}`;
 }
@@ -995,6 +1009,7 @@ async function signOutCloudSave() {
   }
 
   cloudSyncReady = false;
+  cloudLastKnownUpdatedAt = null;
   localStorage.removeItem(CLOUD_LINKED_USER_KEY);
 }
 
@@ -1017,7 +1032,7 @@ async function uploadCloudSave() {
     error: existingCloudError,
   } = await supabaseClient
     .from(CLOUD_SAVE_TABLE)
-    .select("save_data")
+    .select("save_data, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -1027,6 +1042,17 @@ async function uploadCloudSave() {
 
   const existingCloudSave =
     existingCloudRow?.save_data || null;
+
+  // Multi-device conflict check.
+  // Once this device has seen a cloud version, the row must still be that same
+  // version immediately before we write. If it changed, another device saved.
+  if (
+    existingCloudRow?.updated_at &&
+    cloudLastKnownUpdatedAt &&
+    existingCloudRow.updated_at !== cloudLastKnownUpdatedAt
+  ) {
+    throw new CloudSaveConflictError();
+  }
 
   const rollbackBlockedModes = new Set();
 
@@ -1093,24 +1119,62 @@ async function uploadCloudSave() {
 
   const updatedAt = new Date().toISOString();
 
-  const { data, error } = await supabaseClient
-    .from(CLOUD_SAVE_TABLE)
-    .upsert(
-      {
+  let data = null;
+  let error = null;
+
+  if (existingCloudRow) {
+    // Compare-and-swap: only update if the cloud row is still exactly the
+    // version this device last observed. This closes the small race window
+    // between the pre-check above and the actual write.
+    const expectedUpdatedAt = cloudLastKnownUpdatedAt;
+
+    if (!expectedUpdatedAt) {
+      throw new CloudSaveConflictError();
+    }
+
+    const result = await supabaseClient
+      .from(CLOUD_SAVE_TABLE)
+      .update({
+        save_data: payload,
+        updated_at: updatedAt,
+      })
+      .eq("user_id", user.id)
+      .eq("updated_at", expectedUpdatedAt)
+      .select("save_data, updated_at")
+      .maybeSingle();
+
+    data = result.data;
+    error = result.error;
+
+    if (!error && !data) {
+      throw new CloudSaveConflictError();
+    }
+  } else {
+    // First cloud save for this account. A unique user_id prevents two devices
+    // from both creating competing first saves.
+    const result = await supabaseClient
+      .from(CLOUD_SAVE_TABLE)
+      .insert({
         user_id: user.id,
         save_data: payload,
         updated_at: updatedAt,
-      },
-      {
-        onConflict: "user_id",
-      },
-    )
-    .select("save_data, updated_at")
-    .single();
+      })
+      .select("save_data, updated_at")
+      .single();
+
+    data = result.data;
+    error = result.error;
+
+    if (error?.code === "23505") {
+      throw new CloudSaveConflictError();
+    }
+  }
 
   if (error) {
     throw error;
   }
+
+  cloudLastKnownUpdatedAt = data?.updated_at || updatedAt;
 
   if (
     careerMode === "endless" &&
@@ -1182,7 +1246,13 @@ async function runCloudAutoSync() {
 
     await uploadCloudSave();
   } catch (error) {
-    console.warn("Automatic cloud sync failed.", error);
+    if (error instanceof CloudSaveConflictError) {
+      console.warn("Cloud save conflict detected.", error);
+      cloudSyncReady = false;
+      void handleCloudSaveConflict();
+    } else {
+      console.warn("Automatic cloud sync failed.", error);
+    }
   } finally {
     cloudAutoSyncInFlight = false;
 
@@ -1251,6 +1321,7 @@ async function initializeCloudSync() {
     // No explicit Google sign-in = cloud does nothing.
     if (!user) {
       cloudSyncReady = false;
+      cloudLastKnownUpdatedAt = null;
       return;
     }
 
@@ -1267,12 +1338,16 @@ async function initializeCloudSync() {
     // First time this Google account has no cloud save:
     // upload whatever progress currently exists on this device.
     if (!cloudRow?.save_data) {
+      cloudLastKnownUpdatedAt = null;
       localStorage.setItem(CLOUD_LINKED_USER_KEY, user.id);
       cloudSyncReady = true;
 
       await uploadCloudSave();
       return;
     }
+
+    // Remember the exact cloud version that this device is merging from.
+    cloudLastKnownUpdatedAt = cloudRow.updated_at || null;
 
     const cloudProfile =
       cloudRow.save_data?.agentProfile || null;
@@ -1341,7 +1416,13 @@ async function initializeCloudSync() {
     await uploadCloudSave();
   } catch (error) {
     cloudSyncReady = false;
-    console.warn("Cloud sync initialization failed.", error);
+
+    if (error instanceof CloudSaveConflictError) {
+      console.warn("Cloud save conflict detected during startup.", error);
+      void handleCloudSaveConflict();
+    } else {
+      console.warn("Cloud sync initialization failed.", error);
+    }
   }
 }
 
@@ -1363,6 +1444,65 @@ async function downloadCloudSave() {
   }
 
   return data || null;
+}
+
+async function handleCloudSaveConflict() {
+  if (cloudConflictHandling) {
+    return;
+  }
+
+  cloudConflictHandling = true;
+  cloudSyncReady = false;
+
+  try {
+    const shouldLoadCloud = await showGameDialog({
+      eyebrow: "CLOUD SAVE",
+      title: "Newer Save Found",
+      message:
+        "This career was updated on another device. To prevent either save from being overwritten, this device stopped syncing. Load the latest cloud save to continue safely.",
+      confirmLabel: "LOAD LATEST",
+      tone: "warning",
+    });
+
+    if (!shouldLoadCloud) {
+      return;
+    }
+
+    const cloudRow = await downloadCloudSave();
+
+    if (!cloudRow?.save_data) {
+      throw new Error("The latest cloud save could not be found.");
+    }
+
+    // Keep the losing device's current local copy in the normal backup slot
+    // before replacing it. This gives us one extra recovery layer if needed.
+    if (careerMode) {
+      const localRaw = localStorage.getItem(getGameStateStorageKey(careerMode));
+      if (localRaw) {
+        localStorage.setItem(getGameStateBackupKey(careerMode), localRaw);
+      }
+    }
+
+    restoreCloudSavePayload(cloudRow.save_data);
+    cloudLastKnownUpdatedAt = cloudRow.updated_at || null;
+
+    // Reload so every runtime variable is rebuilt from the newly restored save.
+    window.location.reload();
+  } catch (error) {
+    console.error("Could not resolve cloud save conflict.", error);
+
+    await showGameDialog({
+      eyebrow: "CLOUD SAVE",
+      title: "Could Not Load Latest Save",
+      message:
+        error?.message ||
+        "Cloud sync is paused on this device. Reload the game and try again.",
+      confirmLabel: "CLOSE",
+      tone: "warning",
+    });
+  } finally {
+    cloudConflictHandling = false;
+  }
 }
 
 function formatCloudSaveTime(value) {
