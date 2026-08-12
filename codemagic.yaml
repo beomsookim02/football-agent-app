@@ -1,0 +1,29 @@
+workflows:
+  ios-build:
+    name: Football Agent iOS Build
+    instance_type: mac_mini_m2
+
+    environment:
+      xcode: latest
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+
+      - name: Sync Capacitor
+        script: |
+          npx cap sync ios
+
+      - name: Build iOS project
+        script: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+    artifacts:
+      - ~/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
