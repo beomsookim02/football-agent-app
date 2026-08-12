@@ -3655,6 +3655,11 @@ const hiddenBadgeDefinitions = [
 ];
 
 function refreshHiddenBadges() {
+  // Badges are an Endless Career-only system.
+  if (careerMode !== "endless") {
+    return;
+  }
+
   let changed = false;
 
   hiddenBadgeDefinitions.forEach((badge) => {
@@ -4173,6 +4178,11 @@ function runBadgePreview() {
 }
 
 function refreshBadgeUnlocks() {
+  // 30-Season Challenge does not use badges, badge rewards, or badge popups.
+  if (careerMode !== "endless") {
+    return;
+  }
+
   collectNewBadgeUnlocks();
   runBadgePreview();
 }
@@ -4271,6 +4281,11 @@ function showGoatReveal(preview = false) {
 }
 
 function refreshGoatStatus() {
+  // GOAT / final legacy achievement is also Endless Career-only.
+  if (careerMode !== "endless") {
+    return;
+  }
+
   if (
     badgeUnlockRevealActive ||
     badgeUnlockQueue.length > 0
