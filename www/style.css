@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --background: #f3f1eb;
   --card: #ffffff;
   --text: #151515;
@@ -1175,7 +1175,7 @@ main {
   
 }
 
-/* AGENT CAREER V0.2 — RESPONSIVE SCOUT LIST */
+/* AGENT CAREER V0.2 ??RESPONSIVE SCOUT LIST */
 
 .scout-list {
   overflow: hidden;
@@ -1863,14 +1863,14 @@ body.setup-open {
 
 
 /* =========================================================
-   FOOTBALL AGENT — MOBILE UI REWORK
+   FOOTBALL AGENT ??MOBILE UI REWORK
    PC styles remain unchanged. These rules apply on mobile.
    ========================================================= */
 
 @media (max-width: 680px) {
   /* PAGE */
   body {
-    padding: 0 12px 36px;
+    padding: env(safe-area-inset-top) 12px calc(36px + env(safe-area-inset-bottom));
     overflow-x: hidden;
   }
 
@@ -1999,7 +1999,7 @@ body.setup-open {
     font-size: 18px;
   }
 
-  /* AGENCY DASHBOARD — 2 x 2 */
+  /* AGENCY DASHBOARD ??2 x 2 */
   .agency-dashboard {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -2344,7 +2344,7 @@ body.setup-open {
 
 
 /* =========================================================
-   FOOTBALL AGENT — FINAL MOBILE COMPACT + INBOX POLISH
+   FOOTBALL AGENT ??FINAL MOBILE COMPACT + INBOX POLISH
    ========================================================= */
 
 /* PC: make the Inbox message column look like a finished game UI */
@@ -2389,7 +2389,7 @@ body.setup-open {
 
 @media (max-width: 680px) {
   body {
-    padding: 0 12px 36px;
+    padding: env(safe-area-inset-top) 12px calc(36px + env(safe-area-inset-bottom));
     overflow-x: hidden;
   }
 
@@ -2814,7 +2814,7 @@ body.setup-open {
 
 
 /* =========================================================
-   FOOTBALL AGENT — GAME DIALOG SYSTEM
+   FOOTBALL AGENT ??GAME DIALOG SYSTEM
    Replaces browser alert() / confirm() with in-game modals.
    ========================================================= */
 
@@ -3034,7 +3034,7 @@ body.setup-open {
 
 
 /* =========================================================
-   FOOTBALL AGENT — FINAL MOBILE POLISH
+   FOOTBALL AGENT ??FINAL MOBILE POLISH
    Scout compact list + compact Inbox offers + My Agency cards
    PC layout remains unchanged.
    ========================================================= */
@@ -3043,7 +3043,7 @@ body.setup-open {
   /* ---------- MOBILE PAGE / NAV ---------- */
 
   body {
-    padding: 0 12px 36px;
+    padding: env(safe-area-inset-top) 12px calc(36px + env(safe-area-inset-bottom));
     overflow-x: hidden;
   }
 
@@ -3769,7 +3769,7 @@ body.setup-open {
 
 
 /* =========================================================
-   FOOTBALL AGENT — MOBILE MY AGENCY CLEANUP
+   FOOTBALL AGENT ??MOBILE MY AGENCY CLEANUP
    Final layout requested:
    - OVR top-right
    - Team inline with Age/Position
@@ -3862,7 +3862,7 @@ body.setup-open {
 
   /* Team name moves into the player info line */
   .row-player small::after {
-    content: " · " attr(data-club);
+    content: " 쨌 " attr(data-club);
   }
 
   /* Hide the standalone club cell */
@@ -3992,7 +3992,7 @@ body.setup-open {
   }
 
   .row-club::before {
-    content: "· ";
+    content: "쨌 ";
   }
 }
 
@@ -4100,7 +4100,7 @@ body.setup-open {
 
 
 /* =========================================================
-   MOBILE FINAL POLISH — Inbox / My Agency / Club Offers
+   MOBILE FINAL POLISH ??Inbox / My Agency / Club Offers
    ========================================================= */
 @media (max-width: 680px) {
   /* Inbox: do not show the empty "Select a message" detail panel. */
@@ -4274,7 +4274,7 @@ body.setup-open {
   z-index: 20000 !important;
 }
 
-/* My Agency retirement rule — visible on both PC and mobile. */
+/* My Agency retirement rule ??visible on both PC and mobile. */
 .agency-retirement-note {
   margin: 7px 0 0;
   color: var(--muted);
@@ -4330,7 +4330,7 @@ body.setup-open {
 
 
 /* =========================================================
-   PC MY AGENCY — TRUE 7-COLUMN FIX
+   PC MY AGENCY ??TRUE 7-COLUMN FIX
    PLAYER | CLUB | OVR | CONTRACT | VALUE | BALLON D'OR | ACTION
    ========================================================= */
 @media (min-width: 681px) {
@@ -4396,7 +4396,7 @@ body.setup-open {
 
 
 /* =========================================================
-   PC MY AGENCY — OVR / CONTRACT MICRO ALIGNMENT
+   PC MY AGENCY ??OVR / CONTRACT MICRO ALIGNMENT
    ========================================================= */
 @media (min-width: 681px) {
   .agency-player-row .row-overall {
@@ -4410,7 +4410,7 @@ body.setup-open {
 
 
 /* =========================================================
-   PC MY AGENCY — FINAL HEADER / OVR MICRO ALIGNMENT
+   PC MY AGENCY ??FINAL HEADER / OVR MICRO ALIGNMENT
    ========================================================= */
 @media (min-width: 681px) {
   /* Move only the PLAYER header text, not the player rows. */
@@ -4426,7 +4426,7 @@ body.setup-open {
 
 
 /* =========================================================
-   MOBILE SCOUT — LEFT ALIGN CONTRACT / SIGNING COST
+   MOBILE SCOUT ??LEFT ALIGN CONTRACT / SIGNING COST
    ========================================================= */
 @media (max-width: 680px) {
   .scout-contract,
@@ -6792,7 +6792,7 @@ body.badge-unlock-open {
 
 
 /* =========================================================
-   CAREER RECORDS — SIMPLE LIST + PAGINATION
+   CAREER RECORDS ??SIMPLE LIST + PAGINATION
    ========================================================= */
 
 .career-record-winner {
@@ -6894,7 +6894,7 @@ body.badge-unlock-open {
 }
 
 
-/* FINAL MOBILE GOAT POSITION — ornament only, no layout push */
+/* FINAL MOBILE GOAT POSITION ??ornament only, no layout push */
 @media (max-width: 680px) {
   .main-navigation {
     padding-top: 0 !important;
@@ -6918,10 +6918,10 @@ body.badge-unlock-open {
 /* =========================================================
    2026-08-10 FINAL UI POLISH
    - Ballon d'Or trophies: hard 8-per-line layout
-   - Seasons badge: custom CSS clock, not the thin ◷ glyph
+   - Seasons badge: custom CSS clock, not the thin ??glyph
    ========================================================= */
 
-/* BALLON D'OR — each JS-generated trophy-line is a real visual row. */
+/* BALLON D'OR ??each JS-generated trophy-line is a real visual row. */
 #agency-view .agency-player-row .row-ballon-dor,
 .agency-player-row .row-ballon-dor {
   display: flex !important;
@@ -6956,7 +6956,7 @@ body.badge-unlock-open {
   line-height: 1.05 !important;
 }
 
-/* SEASONS — draw a bold clock so it has the same visual weight as ★ and €. */
+/* SEASONS ??draw a bold clock so it has the same visual weight as ??and ?? */
 .milestone-badge-item.unlocked .milestone-icon-seasons,
 .badge-unlock-medal-wrap .milestone-icon-seasons {
   position: relative !important;
@@ -7038,3 +7038,4 @@ body.badge-unlock-open {
     height: 2.5px !important;
   }
 }
+
