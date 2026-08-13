@@ -970,9 +970,62 @@ class CloudSaveConflictError extends Error {
 }
 
 function getOAuthRedirectUrl() {
-  return `${window.location.origin}${window.location.pathname}`;
+  return "com.beomsookim.footballagent://login-callback";
 }
+const NATIVE_OAUTH_REDIRECT_URL =
+  "com.beomsookim.footballagent://login-callback";
 
+const CapacitorApp = window.Capacitor?.Plugins?.App;
+const CapacitorBrowser = window.Capacitor?.Plugins?.Browser;
+
+if (CapacitorApp) {
+  CapacitorApp.addListener("appUrlOpen", async ({ url }) => {
+    if (
+      !url ||
+      !url.startsWith(NATIVE_OAUTH_REDIRECT_URL)
+    ) {
+      return;
+    }
+
+    try {
+      const callbackUrl = new URL(url);
+      const params = new URLSearchParams(
+        callbackUrl.hash
+          ? callbackUrl.hash.slice(1)
+          : callbackUrl.search.slice(1),
+      );
+
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        const { error } = await supabaseClient.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      if (CapacitorBrowser) {
+        try {
+          await CapacitorBrowser.close();
+        } catch (error) {
+          // Browser may already be closed.
+        }
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error(
+        "Could not complete native Google sign-in.",
+        error,
+      );
+    }
+  });
+}
 async function getCloudAuthUser() {
   const {
     data: { user },
@@ -987,16 +1040,30 @@ async function getCloudAuthUser() {
 }
 
 async function signInWithGoogleForCloudSave() {
-  const { error } = await supabaseClient.auth.signInWithOAuth({
+  const { data, error } = await supabaseClient.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: getOAuthRedirectUrl(),
+      skipBrowserRedirect: true,
     },
   });
 
   if (error) {
     throw error;
   }
+
+  if (!data?.url) {
+    throw new Error("Could not create Google sign-in URL.");
+  }
+
+  if (CapacitorBrowser) {
+    await CapacitorBrowser.open({
+      url: data.url,
+    });
+    return;
+  }
+
+  window.location.href = data.url;
 }
 
 async function signOutCloudSave() {
