@@ -3,8 +3,19 @@ workflows:
     name: Football Agent iOS Build
     instance_type: mac_mini_m2
 
+    integrations:
+      app_store_connect: Codemagic
+
     environment:
       xcode: latest
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.beomsookim.footballagent
+
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
 
     scripts:
       - name: Install dependencies
@@ -15,15 +26,23 @@ workflows:
         script: |
           npx cap sync ios
 
-      - name: Build iOS project
+      - name: Install CocoaPods
         script: |
-          xcodebuild \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          cd ios/App
+          pod install
+
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+
+      - name: Build signed IPA
+        script: |
+          cd ios/App
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
-      - ~/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
