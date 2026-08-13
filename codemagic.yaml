@@ -8,14 +8,12 @@ workflows:
 
     environment:
       xcode: latest
-
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.beomsookim.footballagent
-
-   vars:
-  XCODE_PROJECT: "ios/App/App.xcodeproj"
-  XCODE_SCHEME: "App"
+      vars:
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
 
     scripts:
       - name: Install dependencies
@@ -31,12 +29,12 @@ workflows:
           xcode-project use-profiles
 
       - name: Build signed IPA
-  script: |
-    xcode-project build-ipa \
-      --project "$XCODE_PROJECT" \
-      --scheme "$XCODE_SCHEME"
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
-      - ios/App/build/ios/ipa/*.ipa
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
